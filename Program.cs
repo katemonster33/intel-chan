@@ -20,7 +20,6 @@ namespace IntelChan
 {
     class Program
     {
-
         static async Task<List<string>> TranslateSystemIDsToNames(List<string> systemIds)
         {
             using HttpClient client = new()
@@ -46,7 +45,7 @@ namespace IntelChan
 
         static void PrintUsage()
         {
-            Console.WriteLine("Usage: IntelChan.exe [tripwire-session-ID] [groupme-access-token] [groupme-bot-id]");
+            Console.WriteLine("Usage: IntelChan.exe [tripwire-username] [tripwire-password] [groupme-access-token] [groupme-bot-id]");
         }
 
         static async Task Main(string[] args)
@@ -56,15 +55,13 @@ namespace IntelChan
                 PrintUsage();
                 return;
             }
-            string sessionId = args[0];
-            string accessToken = args[1];
-            string botId = args[2];
-            Tripwire.Tripwire tripwire = new Tripwire.Tripwire(sessionId);
+            string accessToken = args[2];
+            string botId = args[3];
+            Tripwire.Tripwire tripwire = new Tripwire.Tripwire();
             GroupmeBot groupmeBot = new GroupmeBot(accessToken, botId);
             using ZkillClient zkillClient = new ZkillClient();
             await zkillClient.ConnectAsync();
-            bool isTripwireConnected = await tripwire.Initialize();
-            if(!isTripwireConnected)
+            if(!await tripwire.Login(args[0], args[1]))
             {
                 Console.WriteLine("Could not login to Tripwire. Verify you are logged in with a browser and the session ID is valid.");
                 Environment.Exit(-1);
@@ -81,10 +78,8 @@ namespace IntelChan
                     await groupmeBot.Post(link);
                 }
             };
-            Console.WriteLine("Tripwire / Zkill connection successful, kill report subscriptions should commence shortly. Press any key to stop.");
+            Console.WriteLine("Tripwire / Zkill connection successful, kill report subscriptions should commence shortly.");
             List<string> subscribedSystemIds = new List<string>(); 
-            Memory<char> buffer = new Memory<char>(new char[1]);
-            var readTask = Console.In.ReadAsync(buffer, new CancellationToken());
             do
             {
                 if(!zkillClient.Connected)
@@ -131,9 +126,7 @@ namespace IntelChan
                     });
                 }
             }
-            while(!readTask.AsTask().Wait(10000));
-
-            await zkillClient.DisconnectAsync();
+            while(true);
         }
     }
 }

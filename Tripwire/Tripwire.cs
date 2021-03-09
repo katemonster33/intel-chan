@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Linq;
 using IntelChan;
 using System.Threading.Tasks;
+using System.Security;
+using System.Net;
 
 namespace Tripwire
 {
@@ -12,53 +14,104 @@ namespace Tripwire
     {
         List<string> systemIds = new List<string>();
         string phpSessionId = string.Empty;
-        public Tripwire(string phpSessionId)
+
+        public Tripwire()
         {
-            this.phpSessionId = phpSessionId;
         }
 
-        public Tripwire(string phpSessionId, List<string> systemIds)
+        public Tripwire(List<string> systemIds)
         {
-            this.phpSessionId = phpSessionId;
             this.systemIds = new List<string>(systemIds);
         }
 
-        public async Task<bool> Initialize()
+        public void ClearSavedSystemIds()
+        {
+            systemIds.Clear();
+        }
+
+        async Task<bool> PopulatePHPSessionId()
         {
             using HttpClient client = new();
 
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://dsyn-tripwire.centralus.cloudapp.azure.com/?system=");
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://dsyn-tripwire.centralus.cloudapp.azure.com/");
             Utilities.PopulateUserAgent(request.Headers);
-            request.Headers.Add("Cookie", $"_ga=GA1.2.728460138.1609098244; PHPSESSID={phpSessionId}; _gid=GA1.2.732828563.1615002251; _gat=1");
 
-            var response = client.Send(request);
+            request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/html"));
+            request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/xhtml+xml"));
+            request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("image/webp"));
+
+            request.Headers.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
+            request.Headers.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
+            request.Headers.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("br"));
+
+            var response = await client.SendAsync(request);
 
             if(response.StatusCode == System.Net.HttpStatusCode.OK)
             {
-                systemIds.Clear();
-                JsonDocument initJson = null;
-                string responseHtml = await response.Content.ReadAsStringAsync();
-                foreach(string line in responseHtml.Split('\n'))
+                var cookies = response.Headers.GetValues("Set-Cookie");
+                phpSessionId = string.Empty;
+                foreach(var cookie in cookies)
                 {
-                    if(line.Contains("var init"))
+                    if(cookie.StartsWith("PHPSESSID="))
                     {
-                        int indexOfBracket = line.IndexOf('{');
-                        if(indexOfBracket != -1)
+                        phpSessionId = cookie.Substring(10);
+                        if(phpSessionId.IndexOf(';') != -1)
                         {
-                            initJson = JsonDocument.Parse(line.Substring(indexOfBracket, line.Length - indexOfBracket - 1));
+                            phpSessionId = phpSessionId.Substring(0, phpSessionId.IndexOf(';'));
                         }
                     }
                 }
-                if(initJson != null)
+            }
+            return !string.IsNullOrEmpty(phpSessionId);
+        }
+
+        public async Task<bool> Login(string username, string password)
+        {
+            bool gotSessionId = await PopulatePHPSessionId();
+            if(!gotSessionId) return false;
+
+            using HttpClient client = new();
+
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://dsyn-tripwire.centralus.cloudapp.azure.com/login.php");
+            Utilities.PopulateUserAgent(request.Headers);
+
+            request.Headers.Add("Cookie", $"_ga=GA1.2.728460138.1609098244; PHPSESSID={phpSessionId}; _gid=GA1.2.732828563.1615002251; _gat=1");
+            
+            request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+            request.Headers.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
+            request.Headers.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
+            request.Headers.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("br"));
+
+            request.Content = new FormUrlEncodedContent(new List<KeyValuePair<string, string>>()
+            {
+                new KeyValuePair<string, string>("mode", "login"),
+                new KeyValuePair<string, string>("fakeusernameremembered", ""),
+                new KeyValuePair<string, string>("fakepasswordremembered", ""),
+                new KeyValuePair<string, string>("username", username),
+                new KeyValuePair<string, string>("password", password)
+            });
+            var response = await client.SendAsync(request);
+            if(response.StatusCode != HttpStatusCode.OK)
+            {
+                return false;
+            }
+
+            JsonDocument initJson = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+            string responseHtml = await response.Content.ReadAsStringAsync();
+            if(initJson == null || !initJson.RootElement.TryGetProperty("result", out JsonElement result) || result.GetString() != "success")
+            {
+                return false;
+            }
+            if(!systemIds.Any())
+            {
+                var tabs = initJson.RootElement.GetProperty("session").GetProperty("options").GetProperty("chain").GetProperty("tabs");
+                foreach(var tab in tabs.EnumerateArray())
                 {
-                    var tabs = initJson.RootElement.GetProperty("options").GetProperty("chain").GetProperty("tabs").EnumerateArray();
-                    foreach(var tab in tabs)
-                    {
-                        systemIds.Add(tab.GetProperty("systemID").GetString());
-                    }
+                    systemIds.Add(tab.GetProperty("systemID").GetString());
                 }
             }
-            return systemIds.Any();
+            return true;
         }
 
         public WormholeSystem CreateSystem(Wormhole connection, string systemId, List<Signature> signatures, List<Wormhole> wormholes, int level)

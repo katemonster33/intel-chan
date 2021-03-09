@@ -28,8 +28,12 @@ namespace Zkill
             get => zkillConnection.State == WebSocketState.Open;
         }
 
-        public void Dispose()
+        public async void Dispose()
         {
+            if(zkillConnection.State == WebSocketState.Open)
+            {
+                await DisconnectAsync();
+            }
             zkillConnection.Dispose();
         }
 
