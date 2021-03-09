@@ -50,7 +50,7 @@ namespace IntelChan
 
         static async Task Main(string[] args)
         {
-            if(args.Length < 3)
+            if(args.Length < 4)
             {
                 PrintUsage();
                 return;
@@ -73,10 +73,7 @@ namespace IntelChan
             }
             zkillClient.KillReceived += async (sender, link) => 
             {   
-                if(groupmeBot != null)
-                {
-                    await groupmeBot.Post(link);
-                }
+                await groupmeBot?.Post(link);
             };
             Console.WriteLine("Tripwire / Zkill connection successful, kill report subscriptions should commence shortly.");
             List<string> subscribedSystemIds = new List<string>(); 
