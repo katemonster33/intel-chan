@@ -1,7 +1,6 @@
 using System;
 using Groupme;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.DependencyInjection;
 using Tripwire;
 using Zkill;
@@ -20,7 +19,8 @@ namespace IntelChan {
                 .Build();
 
             
-            var myServices = new ServiceCollection();
+            var myServices = new ServiceCollection()
+                .AddLogging();
 
             myServices.AddSingleton<IConfiguration>(config);
             myServices.AddSingleton<GroupmeBot>();
