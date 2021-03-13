@@ -25,34 +25,6 @@ namespace IntelChan
         static IConfigurationRoot Configuration{get;set;}
         static IServiceProvider Services{get;set;}
 
-        static async Task<List<string>> TranslateSystemIDsToNames(List<string> systemIds)
-        {
-            using HttpClient client = new()
-            {
-                BaseAddress = new Uri("https://esi.evetech.net/v4/")
-            };
-            List<string> systemNames = new List<string>();
-            foreach(var systemId in systemIds)
-            {
-                var response = await client.GetAsync($"universe/systems/{systemId}");
-                if(response.StatusCode == System.Net.HttpStatusCode.OK)
-                {
-                    JsonDocument jsonSystemInfo = JsonDocument.Parse(await response.Content.ReadAsStreamAsync());
-                    double secStatus = jsonSystemInfo.RootElement.GetProperty("security_status").GetDouble();
-                    //if(secStatus < 0.5)
-                    //{
-                        systemNames.Add(jsonSystemInfo.RootElement.GetProperty("name").GetString());
-                    //}
-                }
-            }
-            return systemNames;
-        }
-
-        static void PrintUsage()
-        {
-            Console.WriteLine("Usage: IntelChan.exe [groupme-access-token] [groupme-bot-id]");
-        }
-
         static async Task Main(string[] args)
         {
             Services = Startup.ConfigureServices(args);
