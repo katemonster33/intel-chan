@@ -8,7 +8,7 @@ Follows standard appsettings.json format.
 * group-me-bot-id
 
 ### Location of secrets.json:
-- Windows: %AppData%\Microsoft\UserSecrets\<user_secrets_id>\secrets.json
+- Windows: %AppData%\Microsoft\UserSecrets\\<user_secrets_id>\secrets.json
 - Linux / macOS: ~/.microsoft/usersecrets/<user_secrets_id>/secrets.json
 
 user secrets id = 3055347B-1519-4D6D-BACE-727E32EB33E9
