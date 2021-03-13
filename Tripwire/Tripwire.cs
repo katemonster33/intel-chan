@@ -10,7 +10,7 @@ using System.Net;
 
 namespace Tripwire
 {
-    public class Tripwire
+    public class Tripwire : ITripwire
     {
         List<string> systemIds = new List<string>();
         string phpSessionId = string.Empty;
@@ -46,16 +46,16 @@ namespace Tripwire
 
             var response = await client.SendAsync(request);
 
-            if(response.StatusCode == System.Net.HttpStatusCode.OK)
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
                 var cookies = response.Headers.GetValues("Set-Cookie");
                 phpSessionId = string.Empty;
-                foreach(var cookie in cookies)
+                foreach (var cookie in cookies)
                 {
-                    if(cookie.StartsWith("PHPSESSID="))
+                    if (cookie.StartsWith("PHPSESSID="))
                     {
                         phpSessionId = cookie.Substring(10);
-                        if(phpSessionId.IndexOf(';') != -1)
+                        if (phpSessionId.IndexOf(';') != -1)
                         {
                             phpSessionId = phpSessionId.Substring(0, phpSessionId.IndexOf(';'));
                         }
@@ -68,7 +68,7 @@ namespace Tripwire
         public async Task<bool> Login(string username, string password)
         {
             bool gotSessionId = await PopulatePHPSessionId();
-            if(!gotSessionId) return false;
+            if (!gotSessionId) return false;
 
             using HttpClient client = new();
 
@@ -76,7 +76,7 @@ namespace Tripwire
             Utilities.PopulateUserAgent(request.Headers);
 
             request.Headers.Add("Cookie", $"_ga=GA1.2.728460138.1609098244; PHPSESSID={phpSessionId}; _gid=GA1.2.732828563.1615002251; _gat=1");
-            
+
             request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 
             request.Headers.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
@@ -92,21 +92,21 @@ namespace Tripwire
                 new KeyValuePair<string, string>("password", password)
             });
             var response = await client.SendAsync(request);
-            if(response.StatusCode != HttpStatusCode.OK)
+            if (response.StatusCode != HttpStatusCode.OK)
             {
                 return false;
             }
 
             JsonDocument initJson = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
             string responseHtml = await response.Content.ReadAsStringAsync();
-            if(initJson == null || !initJson.RootElement.TryGetProperty("result", out JsonElement result) || result.GetString() != "success")
+            if (initJson == null || !initJson.RootElement.TryGetProperty("result", out JsonElement result) || result.GetString() != "success")
             {
                 return false;
             }
-            if(!systemIds.Any())
+            if (!systemIds.Any())
             {
                 var tabs = initJson.RootElement.GetProperty("session").GetProperty("options").GetProperty("chain").GetProperty("tabs");
-                foreach(var tab in tabs.EnumerateArray())
+                foreach (var tab in tabs.EnumerateArray())
                 {
                     systemIds.Add(tab.GetProperty("systemID").GetString());
                 }
@@ -122,14 +122,14 @@ namespace Tripwire
                 Children = new List<KeyValuePair<Signature, WormholeSystem>>()
             };
             List<Signature> systemSigs = signatures.Where(ss => ss.SystemID == systemId).ToList();
-            foreach(var sig in systemSigs)
+            foreach (var sig in systemSigs)
             {
                 var hole = wormholes.FirstOrDefault(h => h.InitialID == sig.ID || h.SecondaryID == sig.ID);
-                if(hole != null)
+                if (hole != null)
                 {
                     var otherSigId = hole.InitialID == sig.ID ? hole.SecondaryID : hole.InitialID;
                     var childSig = signatures.FirstOrDefault(child => child.ID == otherSigId);
-                    if(childSig != null)
+                    if (childSig != null)
                     {
                         signatures.Remove(childSig);
                         wormholes.Remove(hole);
@@ -139,13 +139,13 @@ namespace Tripwire
             }
             return output;
         }
-        
+
         public void GetChainSystemIds(WormholeSystem chain, ref List<string> systemIds)
         {
             systemIds.Add(chain.SystemId);
-            foreach(var wh in chain.Children)
+            foreach (var wh in chain.Children)
             {
-                if(wh.Value != null)
+                if (wh.Value != null)
                 {
                     GetChainSystemIds(wh.Value, ref systemIds);
                 }
@@ -180,26 +180,26 @@ namespace Tripwire
             List<Wormhole> tripwireHoles = new List<Wormhole>();
             List<WormholeSystem> chains = new List<WormholeSystem>();
             syncTime = DateTime.Now;
-            if(response.StatusCode == global::System.Net.HttpStatusCode.OK)
+            if (response.StatusCode == global::System.Net.HttpStatusCode.OK)
             {
                 JsonDocument doc = JsonDocument.Parse(response.Content.ReadAsStream());
                 syncTime = DateTime.Parse(doc.RootElement.GetProperty("sync").GetString());
                 var sigs = doc.RootElement.GetProperty("signatures");
-                foreach(var node in sigs.EnumerateObject())
+                foreach (var node in sigs.EnumerateObject())
                 {
                     var sig = JsonSerializer.Deserialize<Signature>(node.Value.ToString());
-                    if(sig.SystemID != null && sig.SystemID.Length > 3)
+                    if (sig.SystemID != null && sig.SystemID.Length > 3)
                     {
                         tripwireSigs.Add(sig);
                     }
                 }
                 var wormholes = doc.RootElement.GetProperty("wormholes");
-                foreach(var node in wormholes.EnumerateObject())
+                foreach (var node in wormholes.EnumerateObject())
                 {
                     tripwireHoles.Add(JsonSerializer.Deserialize<Wormhole>(node.Value.ToString()));
                 }
                 List<string> allSystemIds = new List<string>();
-                foreach(var id in systemIds)
+                foreach (var id in systemIds)
                 {
                     chains.Add(CreateSystem(null, id, tripwireSigs, tripwireHoles, 0));
                 }

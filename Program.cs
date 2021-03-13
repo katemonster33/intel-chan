@@ -15,11 +15,16 @@ using System.Text;
 using Tripwire;
 using Zkill;
 using Groupme;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IntelChan
 {
     class Program
     {
+        static IConfigurationRoot Configuration{get;set;}
+        static IServiceProvider Services{get;set;}
+
         static async Task<List<string>> TranslateSystemIDsToNames(List<string> systemIds)
         {
             using HttpClient client = new()
@@ -45,21 +50,17 @@ namespace IntelChan
 
         static void PrintUsage()
         {
-            Console.WriteLine("Usage: IntelChan.exe [tripwire-username] [tripwire-password] [groupme-access-token] [groupme-bot-id]");
+            Console.WriteLine("Usage: IntelChan.exe [groupme-access-token] [groupme-bot-id]");
         }
 
         static async Task Main(string[] args)
         {
-            if(args.Length < 4)
-            {
-                PrintUsage();
-                return;
-            }
-            string accessToken = args[2];
-            string botId = args[3];
-            Tripwire.Tripwire tripwire = new Tripwire.Tripwire();
-            GroupmeBot groupmeBot = new GroupmeBot(accessToken, botId);
-            using ZkillClient zkillClient = new ZkillClient();
+            Services = Startup.ConfigureServices(args);
+
+            var tripwire =  Services.GetService<ITripwire>();
+            var groupmeBot = Services.GetService<IGroupmeBot>();            
+            var zkillClient = Services.GetService<IZkillClient>();
+
             await zkillClient.ConnectAsync();
             if(!await tripwire.Login(args[0], args[1]))
             {
@@ -125,5 +126,7 @@ namespace IntelChan
             }
             while(true);
         }
+
+
     }
 }
