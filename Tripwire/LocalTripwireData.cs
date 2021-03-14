@@ -5,13 +5,13 @@ using Microsoft.Extensions.Configuration;
 using MySqlConnector;
 using Tripwire;
 
-namespace Tripwire 
+namespace Tripwire
 {
     public class LocalTripwireData : ITripwireDataProvider
     {
         private const string ConnectionString = "Default";
-        public DateTime SyncTime {get => _syncTime;}
-        public IList<string> SystemIds{get => new List<string>{"31000732"};}
+        public DateTime SyncTime { get => _syncTime; }
+        public IList<string> SystemIds { get => new List<string> { Config["HomeSystemId"] }; }
         private DateTime _syncTime;
         IConfiguration Config { get; }
 
@@ -30,17 +30,19 @@ namespace Tripwire
             var retList = new List<Wormhole>();
             while (reader.Read())
             {
-                retList.Add(
-                    new Wormhole
-                    {
-                        InitialID = reader.GetInt32("initialID").ToString(),
-                        MaskID = reader.GetDecimal("maskID").ToString(),
-                        Parent = reader.GetString("parent").ToString(),
-                        SecondaryID = reader.GetInt32("secondaryID").ToString()
-                    }
-                );
+
+                var newHole = new Wormhole
+                {
+                    InitialID = reader.GetInt32("initialID").ToString(),
+                    MaskID = reader.GetDecimal("maskID").ToString(),
+                    SecondaryID = reader.GetInt32("secondaryID").ToString()
+                };
+                if (reader["parent"] != DBNull.Value)
+                    newHole.Parent = reader.GetString("parent").ToString();
+                retList.Add(newHole);
+                
             }
-            _syncTime=DateTime.Now;
+            _syncTime = DateTime.Now;
             return retList;
 
         }
@@ -54,7 +56,7 @@ namespace Tripwire
             var retList = new List<Signature>();
             while (reader.Read())
             {
-                var newSig = 
+                var newSig =
                     new Signature
                     {
                         Bookmark = null,
@@ -71,13 +73,13 @@ namespace Tripwire
                         SystemID = reader.GetInt32("systemID").ToString(),
                         Type = reader.GetString("type")
                     };
-                if(reader["name"] != DBNull.Value)
+                if (reader["name"] != DBNull.Value)
                     newSig.Name = reader.GetString("name");
-                if(reader ["signatureID"] != DBNull.Value)
+                if (reader["signatureID"] != DBNull.Value)
                     newSig.SignatureID = reader.GetString("signatureID");
                 retList.Add(newSig);
             }
-            _syncTime=DateTime.Now;
+            _syncTime = DateTime.Now;
             return retList;
         }
 
