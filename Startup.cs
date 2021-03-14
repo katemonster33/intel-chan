@@ -23,7 +23,7 @@ namespace IntelChan {
                 .AddLogging();
 
             myServices.AddSingleton<IConfiguration>(config);
-            myServices.AddSingleton<GroupmeBot>();
+            myServices.AddSingleton<DummyGroupmeBot>();
             myServices.AddSingleton<LocalTripwire>();
             myServices.AddSingleton<ZkillClient>();
             myServices.AddSingleton<TripwireLogic>();

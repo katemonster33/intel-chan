@@ -5,7 +5,7 @@ namespace Groupme
 {
     public interface IGroupmeBot
     {
-        Task<HttpResponseMessage> Post(string message);
-        Task<HttpResponseMessage> Post(string message, string remoteImageUrl);
+        Task Post(string message);
+        
     }
 }

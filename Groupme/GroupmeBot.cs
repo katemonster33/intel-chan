@@ -30,7 +30,7 @@ namespace Groupme
                 throw new ApplicationException("missing config value for groupme-bot-id");
         }
 
-        public async Task<HttpResponseMessage> Post(string message)
+        public async Task Post(string message)
         {
             using HttpClient groupmeClient = new()
             {
@@ -46,7 +46,6 @@ namespace Groupme
                 BotId = botId,
                 Text = message
             });
-            return output;
         }
 
         public async Task<HttpResponseMessage> Post(string message, string remoteImageUrl)

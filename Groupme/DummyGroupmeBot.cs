@@ -4,14 +4,9 @@ using System.Threading.Tasks;
 namespace Groupme{
     public class DummyGroupmeBot : IGroupmeBot
     {
-        public Task<HttpResponseMessage> Post(string message)
+        public Task Post(string message)
         {
-            throw new System.NotImplementedException();
-        }
-
-        public Task<HttpResponseMessage> Post(string message, string remoteImageUrl)
-        {
-            throw new System.NotImplementedException();
+            Console.WriteLine("message");
         }
     }
 }
