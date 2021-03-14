@@ -1,3 +1,4 @@
+using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -7,6 +8,7 @@ namespace Groupme{
         public Task Post(string message)
         {
             Console.WriteLine("message");
+            return Task.CompletedTask;
         }
     }
 }
