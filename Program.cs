@@ -22,81 +22,64 @@ namespace IntelChan
 {
     class Program
     {
-        static IConfigurationRoot Configuration{get;set;}
-        static IServiceProvider Services{get;set;}
+        static IConfigurationRoot Configuration { get; set; }
+        static IServiceProvider Services { get; set; }
 
         static async Task Main(string[] args)
         {
             Services = Startup.ConfigureServices(args);
 
-            var tripwire =  Services.GetService<ITripwire>();
-            var groupmeBot = Services.GetService<IGroupmeBot>();            
+            var tripwire = Services.GetService<TripwireLogic>();
+            var groupmeBot = Services.GetService<IGroupmeBot>();
             var zkillClient = Services.GetService<IZkillClient>();
 
             await zkillClient.ConnectAsync();
-            if(!await tripwire.Login(args[0], args[1]))
-            {
-                Console.WriteLine("Could not login to Tripwire. Verify you are logged in with a browser and the session ID is valid.");
-                Environment.Exit(-1);
-            }
-            if(!zkillClient.Connected)
+
+            if (!zkillClient.Connected)
             {
                 Console.WriteLine("Could not connect to Zkill.");
                 Environment.Exit(-1);
             }
-            zkillClient.KillReceived += async (sender, link) => 
-            {   
+            zkillClient.KillReceived += async (sender, link) =>
+            {
                 await groupmeBot?.Post(link);
             };
             Console.WriteLine("Tripwire / Zkill connection successful, kill report subscriptions should commence shortly.");
-            List<string> subscribedSystemIds = new List<string>(); 
+            List<string> subscribedSystemIds = new List<string>();
             do
             {
-                if(!zkillClient.Connected)
+                if (!zkillClient.Connected)
                 {
                     await zkillClient.ConnectAsync();
                 }
-                try
+
+
+                var response = await tripwire.GetChains();
+                DateTime syncTime = tripwire.SyncTime;
+                if (response.Count > 0)
                 {
-                    var response = tripwire.GetChains(out DateTime syncTime);
-                    if(response.Count > 0)
+                    List<string> systemIds = new List<string>();
+                    foreach (var chain in response)
                     {
-                        List<string> systemIds = new List<string>();
-                        foreach(var chain in response)
-                        {
-                            tripwire.GetChainSystemIds(chain, ref systemIds);
-                        }
-                        systemIds = systemIds.Distinct().ToList();
+                        tripwire.GetChainSystemIds(chain, ref systemIds);
+                    }
+                    systemIds = systemIds.Distinct().ToList();
 
-                        List<string> addedSigs = systemIds.Except(subscribedSystemIds).ToList();
-                        await zkillClient.SubscribeSystems(addedSigs);
+                    List<string> addedSigs = systemIds.Except(subscribedSystemIds).ToList();
+                    await zkillClient.SubscribeSystems(addedSigs);
 
-                        List<string> removedSigs = subscribedSystemIds.Except(systemIds).ToList();
-                        await zkillClient.UnsubscribeSystems(removedSigs);
-                        if(addedSigs.Any() || removedSigs.Any())
-                        {
-                            subscribedSystemIds = new List<string>(systemIds);
-                            Console.WriteLine($"Subscribed to {addedSigs.Count} systems, unsubscribed from {removedSigs.Count} systems.");
-                        }
+                    List<string> removedSigs = subscribedSystemIds.Except(systemIds).ToList();
+                    await zkillClient.UnsubscribeSystems(removedSigs);
+                    if (addedSigs.Any() || removedSigs.Any())
+                    {
+                        subscribedSystemIds = new List<string>(systemIds);
+                        Console.WriteLine($"Subscribed to {addedSigs.Count} systems, unsubscribed from {removedSigs.Count} systems.");
                     }
                 }
-                catch(AggregateException ae)
-                {
-                    ae.Handle(ex => 
-                    {
-                        if(ex is WebSocketException wsex)
-                        {
-                            return true;
-                        }
-                        if(ex is HttpRequestException httpex)
-                        {
-                            return true;
-                        }
-                        return false;
-                    });
-                }
+
+
             }
-            while(true);
+            while (true);
         }
 
 
