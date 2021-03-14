@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Zkill
@@ -10,7 +11,7 @@ namespace Zkill
 
         event EventHandler<string> KillReceived;
 
-        Task ConnectAsync();
+        Task ConnectAsync(CancellationToken cancellationToken);
         Task DisconnectAsync();
         void Dispose();
         Task SubscribeSystems(List<string> systemIds);

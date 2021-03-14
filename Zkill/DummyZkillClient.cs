@@ -8,13 +8,14 @@ namespace Zkill
     public class DummyZkillClient : IZkillClient
     {
         public bool Connected {get;set;}
-
+        public CancellationToken CancelToken{get;set;}
         public event EventHandler<string> KillReceived;
 
         Task readThread = null;
-        public async Task ConnectAsync()
+        public async Task ConnectAsync(CancellationToken cancelToken)
         {
             Connected = true;
+            CancelToken=cancelToken;
             if (readThread != null)
             {
                 await readThread;
@@ -28,9 +29,13 @@ namespace Zkill
 
         private Task DoWork()
         {
-
-            KillReceived?.Invoke(this, "kill");
-
+            while(true){
+                Thread.Sleep(5000);
+                KillReceived?.Invoke(this, "kill");
+                if(CancelToken.IsCancellationRequested)
+                    break;
+                
+            }
             return Task.CompletedTask;
         }
 
