@@ -28,10 +28,11 @@ namespace IntelChan
         static async Task Main(string[] args)
         {
             Services = Startup.ConfigureServices(args);
-
+            Configuration = Services.GetService<IConfigurationRoot>();
             var tripwire = Services.GetService<TripwireLogic>();
             var groupmeBot = Services.GetService<IGroupmeBot>();
             var zkillClient = Services.GetService<IZkillClient>();
+            
 
             await zkillClient.ConnectAsync();
 
