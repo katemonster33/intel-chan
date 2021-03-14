@@ -70,7 +70,7 @@ namespace Zkill
             await zkillConnection.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, cancelToken.Token);
         }
 
-        public async Task ReadAsync()
+        private async Task ReadAsync()
         {
             string recvStr = string.Empty;
             ArraySegment<byte> buffer = new ArraySegment<byte>(new byte[1024]);

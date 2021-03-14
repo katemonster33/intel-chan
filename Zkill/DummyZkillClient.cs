@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Zkill
@@ -10,9 +11,26 @@ namespace Zkill
 
         public event EventHandler<string> KillReceived;
 
-        public Task ConnectAsync()
+        Task readThread = null;
+        public async Task ConnectAsync()
         {
             Connected = true;
+            if (readThread != null)
+            {
+                await readThread;
+                readThread = null;
+            }
+
+            readThread = DoWork();
+            
+            
+        }
+
+        private Task DoWork()
+        {
+
+            KillReceived?.Invoke(this, "kill");
+
             return Task.CompletedTask;
         }
 
@@ -27,29 +45,16 @@ namespace Zkill
             
         }
 
-        public Task ReadAsync()
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task SubscribeAll()
-        {
-            throw new NotImplementedException();
-        }
-
         public Task SubscribeSystems(List<string> systemIds)
         {
-            throw new NotImplementedException();
+            return Task.CompletedTask;
         }
 
-        public Task UnsubscribeAll()
-        {
-            throw new NotImplementedException();
-        }
+    
 
         public Task UnsubscribeSystems(List<string> systemIds)
         {
-            throw new NotImplementedException();
+            return Task.CompletedTask;
         }
     }
 }

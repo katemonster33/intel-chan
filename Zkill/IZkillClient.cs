@@ -13,10 +13,7 @@ namespace Zkill
         Task ConnectAsync();
         Task DisconnectAsync();
         void Dispose();
-        Task ReadAsync();
-        Task SubscribeAll();
         Task SubscribeSystems(List<string> systemIds);
-        Task UnsubscribeAll();
         Task UnsubscribeSystems(List<string> systemIds);
     }
 }
