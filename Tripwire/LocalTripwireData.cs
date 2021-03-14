@@ -7,7 +7,7 @@ using Tripwire;
 
 namespace Tripwire 
 {
-    public class LocalTripwire : ITripwireDataProvider
+    public class LocalTripwireData : ITripwireDataProvider
     {
         private const string ConnectionString = "Default";
         public DateTime SyncTime {get => _syncTime;}
@@ -15,7 +15,7 @@ namespace Tripwire
         private DateTime _syncTime;
         IConfiguration Config { get; }
 
-        public LocalTripwire(IConfiguration configuration)
+        public LocalTripwireData(IConfiguration configuration)
         {
             Config = configuration;
         }
@@ -24,7 +24,7 @@ namespace Tripwire
         public async Task<IList<Wormhole>> GetHoles()
         {
             using var conn = GetConnection();
-            var cmd = new MySqlCommand("SELECT * FROM WORMHOLES", conn);
+            var cmd = new MySqlCommand("select * from wormholes", conn);
             await conn.OpenAsync();
             using var reader = await cmd.ExecuteReaderAsync();
             var retList = new List<Wormhole>();
@@ -54,7 +54,7 @@ namespace Tripwire
             var retList = new List<Signature>();
             while (reader.Read())
             {
-                retList.Add(
+                var newSig = 
                     new Signature
                     {
                         Bookmark = null,
@@ -68,11 +68,14 @@ namespace Tripwire
                         ModifiedByID = reader.GetInt32("modifiedByID").ToString(),
                         ModifiedByName = reader.GetString("modifiedByName"),
                         ModifiedTime = reader.GetDateTime("modifiedTime").ToString(),
-                        Name = reader.GetString("name"),
-                        SignatureID = reader.GetString("signatureID"),
-                        SystemID = reader.GetString("systemID"),
+                        SystemID = reader.GetInt32("systemID").ToString(),
                         Type = reader.GetString("type")
-                    });
+                    };
+                if(reader["name"] != DBNull.Value)
+                    newSig.Name = reader.GetString("name");
+                if(reader ["signatureID"] != DBNull.Value)
+                    newSig.SignatureID = reader.GetString("signatureID");
+                retList.Add(newSig);
             }
             _syncTime=DateTime.Now;
             return retList;

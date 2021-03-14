@@ -24,7 +24,7 @@ namespace IntelChan {
 
             myServices.AddSingleton<IConfiguration>(config);
             myServices.AddSingleton<IGroupmeBot,DummyGroupmeBot>();
-            myServices.AddSingleton<ITripwireDataProvider,LocalTripwire>();
+            myServices.AddSingleton<ITripwireDataProvider,LocalTripwireData>();
             myServices.AddSingleton<IZkillClient,ZkillClient>();
             myServices.AddSingleton<TripwireLogic>();
             return myServices.BuildServiceProvider();
