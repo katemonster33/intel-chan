@@ -6,21 +6,24 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Zkill
 {
-    public class ZkillClient : IDisposable
+
+    public class ZkillClient : IDisposable, IZkillClient
     {
         ClientWebSocket zkillConnection;
-        CancellationTokenSource cancelToken;
+        CancellationToken CancelToken{get;set;}
         Task readThread = null;
 
         public event EventHandler<string> KillReceived;
 
-        public ZkillClient()
+        ILogger<ZkillClient> Logger { get; }
+        public ZkillClient(ILogger<ZkillClient> logger)
         {
             zkillConnection = new ClientWebSocket();
-            cancelToken = new CancellationTokenSource();
+            Logger = logger;
         }
 
         public bool Connected
@@ -30,83 +33,89 @@ namespace Zkill
 
         public async void Dispose()
         {
-            if(zkillConnection.State == WebSocketState.Open)
+            if (zkillConnection.State == WebSocketState.Open)
             {
                 await DisconnectAsync();
             }
             zkillConnection.Dispose();
         }
 
-        public async Task ConnectAsync()
+        public async Task ConnectAsync(CancellationToken cancelToken)
         {
-            if(Connected)
+
+            CancelToken = cancelToken;
+
+            if (readThread != null)
             {
-                throw new InvalidOperationException();
-            }
-            if(readThread != null)
-            {
-                cancelToken.Cancel();
                 await readThread;
                 readThread = null;
-            } 
-
-            await zkillConnection.ConnectAsync(new Uri("wss://zkillboard.com/websocket/"), cancelToken.Token);
-
-            if(zkillConnection.State == WebSocketState.Open)
-            {
-                readThread = ReadAsync();
+                if(cancelToken.IsCancellationRequested)
+                    return;
             }
+
+            await zkillConnection.ConnectAsync(new Uri("wss://zkillboard.com/websocket/"), cancelToken);
+
+            if (zkillConnection.State == WebSocketState.Open)
+                readThread = ReadAsync();
         }
 
         public async Task DisconnectAsync()
         {
-            if(readThread != null)
+            if (readThread != null)
             {
-                cancelToken.Cancel();
                 await readThread;
                 readThread = null;
-            } 
-            await zkillConnection.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, cancelToken.Token);
+            }
+            await zkillConnection.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancelToken);
         }
 
-        public async Task ReadAsync()
+        private async Task ReadAsync()
         {
             string recvStr = string.Empty;
             ArraySegment<byte> buffer = new ArraySegment<byte>(new byte[1024]);
-            while(zkillConnection.State == WebSocketState.Open)
+            while (zkillConnection.State == WebSocketState.Open)
             {
+                WebSocketReceiveResult result = null;
+                Logger.LogDebug("Waiting for data from zkill");
                 try
                 {
-                    var result = await zkillConnection.ReceiveAsync(buffer, cancelToken.Token);
-                    if(result.MessageType == WebSocketMessageType.Close || cancelToken.Token.IsCancellationRequested)
-                    {
-                        break;
-                    }
-                    recvStr += Encoding.UTF8.GetString(buffer.Array, 0, result.Count);
-                    if(result.EndOfMessage)
-                    {
-                        JsonDocument json = JsonDocument.Parse(recvStr);
-                        string link = json.RootElement.GetProperty("url").GetString();
-                        KillReceived?.Invoke(this, link);
-                        recvStr = string.Empty;
-                    }
+                    result = await zkillConnection.ReceiveAsync(buffer, CancelToken);
                 }
-                catch(Exception e)
+                catch(TaskCanceledException)
                 {
-                    Console.WriteLine(e.ToString());
+                    Logger.LogInformation("Aborting Read");
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError(e.ToString());
+                }
+
+                if (null == result || result.MessageType == WebSocketMessageType.Close || CancelToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                recvStr += Encoding.UTF8.GetString(buffer.Array, 0, result.Count);
+                if (result.EndOfMessage)
+                {
+                    JsonDocument json = JsonDocument.Parse(recvStr);
+                    string link = json.RootElement.GetProperty("url").GetString();
+                    KillReceived?.Invoke(this, link);
+                    Logger.LogInformation("Kill Received");
+                    recvStr = string.Empty;
                 }
             }
         }
 
         async Task SendWebsocketTextAsync(string text)
         {
-            await zkillConnection.SendAsync(new ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes(text)), WebSocketMessageType.Text, true, cancelToken.Token);
+            await zkillConnection.SendAsync(new ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes(text)), WebSocketMessageType.Text, true, CancelToken);
         }
 
         string GetZkillWebsocketCommand(string cmd, IEnumerable<string> systemIds)
         {
             return "{\"action\":\"" + cmd + "\",\"channel\":\"" + string.Join(',', systemIds.Select(id => "system:" + id)) + "\"}";
-        } 
+        }
 
         public async Task SubscribeAll()
         {
@@ -120,7 +129,7 @@ namespace Zkill
 
         public async Task SubscribeSystems(List<string> systemIds)
         {
-            foreach(var systemId in systemIds)
+            foreach (var systemId in systemIds)
             {
                 await SendWebsocketTextAsync("{\"action\":\"sub\",\"channel\":\"system:" + systemId + "\"}");
             }
@@ -128,7 +137,7 @@ namespace Zkill
 
         public async Task UnsubscribeSystems(List<string> systemIds)
         {
-            foreach(var systemId in systemIds)
+            foreach (var systemId in systemIds)
             {
                 await SendWebsocketTextAsync("{\"action\":\"unsub\",\"channel\":\"system:" + systemId + "\"}");
             }

@@ -1,129 +1,29 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Threading.Tasks;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Net.WebSockets;
-using HtmlAgilityPack;
-using System.Collections.Generic;
-using System.Threading;
-using System.Text;
+﻿using System.Threading.Tasks;
+using Groupme;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Tripwire;
 using Zkill;
-using Groupme;
 
 namespace IntelChan
 {
     class Program
     {
-        static async Task<List<string>> TranslateSystemIDsToNames(List<string> systemIds)
-        {
-            using HttpClient client = new()
-            {
-                BaseAddress = new Uri("https://esi.evetech.net/v4/")
-            };
-            List<string> systemNames = new List<string>();
-            foreach(var systemId in systemIds)
-            {
-                var response = await client.GetAsync($"universe/systems/{systemId}");
-                if(response.StatusCode == System.Net.HttpStatusCode.OK)
-                {
-                    JsonDocument jsonSystemInfo = JsonDocument.Parse(await response.Content.ReadAsStreamAsync());
-                    double secStatus = jsonSystemInfo.RootElement.GetProperty("security_status").GetDouble();
-                    //if(secStatus < 0.5)
-                    //{
-                        systemNames.Add(jsonSystemInfo.RootElement.GetProperty("name").GetString());
-                    //}
-                }
-            }
-            return systemNames;
-        }
+        static Task Main(string[] args)=>
+             CreateHostBuilder(args).Build()
+                .RunAsync();
+        
 
-        static void PrintUsage()
-        {
-            Console.WriteLine("Usage: IntelChan.exe [tripwire-username] [tripwire-password] [groupme-access-token] [groupme-bot-id]");
-        }
-
-        static async Task Main(string[] args)
-        {
-            if(args.Length < 4)
+        public static IHostBuilder CreateHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args)
+            .ConfigureServices((hostContext,myServices) =>
             {
-                PrintUsage();
-                return;
-            }
-            string accessToken = args[2];
-            string botId = args[3];
-            Tripwire.Tripwire tripwire = new Tripwire.Tripwire();
-            GroupmeBot groupmeBot = new GroupmeBot(accessToken, botId);
-            using ZkillClient zkillClient = new ZkillClient();
-            await zkillClient.ConnectAsync();
-            if(!await tripwire.Login(args[0], args[1]))
-            {
-                Console.WriteLine("Could not login to Tripwire. Verify you are logged in with a browser and the session ID is valid.");
-                Environment.Exit(-1);
-            }
-            if(!zkillClient.Connected)
-            {
-                Console.WriteLine("Could not connect to Zkill.");
-                Environment.Exit(-1);
-            }
-            zkillClient.KillReceived += async (sender, link) => 
-            {   
-                await groupmeBot?.Post(link);
-            };
-            Console.WriteLine("Tripwire / Zkill connection successful, kill report subscriptions should commence shortly.");
-            List<string> subscribedSystemIds = new List<string>(); 
-            do
-            {
-                if(!zkillClient.Connected)
-                {
-                    await zkillClient.ConnectAsync();
-                }
-                try
-                {
-                    var response = tripwire.GetChains(out DateTime syncTime);
-                    if(response.Count > 0)
-                    {
-                        List<string> systemIds = new List<string>();
-                        foreach(var chain in response)
-                        {
-                            tripwire.GetChainSystemIds(chain, ref systemIds);
-                        }
-                        systemIds = systemIds.Distinct().ToList();
-
-                        List<string> addedSigs = systemIds.Except(subscribedSystemIds).ToList();
-                        await zkillClient.SubscribeSystems(addedSigs);
-
-                        List<string> removedSigs = subscribedSystemIds.Except(systemIds).ToList();
-                        await zkillClient.UnsubscribeSystems(removedSigs);
-                        if(addedSigs.Any() || removedSigs.Any())
-                        {
-                            subscribedSystemIds = new List<string>(systemIds);
-                            Console.WriteLine($"Subscribed to {addedSigs.Count} systems, unsubscribed from {removedSigs.Count} systems.");
-                        }
-                    }
-                }
-                catch(AggregateException ae)
-                {
-                    ae.Handle(ex => 
-                    {
-                        if(ex is WebSocketException wsex)
-                        {
-                            return true;
-                        }
-                        if(ex is HttpRequestException httpex)
-                        {
-                            return true;
-                        }
-                        return false;
-                    });
-                }
-            }
-            while(true);
-        }
+                myServices.AddHostedService<Worker>();
+                myServices.AddSingleton<IGroupmeBot,DummyGroupmeBot>();
+                myServices.AddSingleton<ITripwireDataProvider,DummyTripwireData>();
+                myServices.AddSingleton<IZkillClient,ZkillClient>();
+                myServices.AddSingleton<TripwireLogic>();
+                
+            });
     }
 }
