@@ -20,7 +20,7 @@ namespace IntelChan
             {
                 myServices.AddHostedService<Worker>();
                 myServices.AddSingleton<IGroupmeBot,DummyGroupmeBot>();
-                myServices.AddSingleton<ITripwireDataProvider,DummyTripwireData>();
+                myServices.AddSingleton<ITripwireDataProvider,LocalTripwireData>();
                 myServices.AddSingleton<IZkillClient,ZkillClient>();
                 myServices.AddSingleton<TripwireLogic>();
                 

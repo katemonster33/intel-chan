@@ -8,11 +8,14 @@ using IntelChan;
 using System.Linq;
 using Microsoft.Extensions.Configuration;
 using System.Net.WebSockets;
+using System.Threading;
 
 namespace Tripwire
 {
     public class TripwireData : ITripwireDataProvider
     {
+        public bool Connected{get;set;}
+        CancellationToken CancelToken{get;set;}
         List<string> systemIds = new List<string>();
         public IList<string> SystemIds { get => systemIds; }
         string phpSessionId = string.Empty;
@@ -62,7 +65,7 @@ namespace Tripwire
             return !string.IsNullOrEmpty(phpSessionId);
         }
 
-        private async Task<bool> Login()
+        private async Task<bool> Login(CancellationToken token)
         {
             var username = Configuration["tripwire-username"];
             var password = Configuration["tripwire-password"];
@@ -94,7 +97,7 @@ namespace Tripwire
             HttpResponseMessage response = null;
             try
             {
-                response = await client.SendAsync(request);
+                response = await client.SendAsync(request, token);
 
             }
             catch (AggregateException ae)
@@ -135,7 +138,7 @@ namespace Tripwire
         }
 
 
-        private async Task GetJsonData()
+        private async Task GetJsonData(CancellationToken token)
         {
             List<Signature> tripwireSigs = new List<Signature>();
             List<Wormhole> tripwireHoles = new List<Wormhole>();
@@ -161,7 +164,7 @@ namespace Tripwire
                 new KeyValuePair<string, string>("instance","1615002323.5"),
                 new KeyValuePair<string, string>("version","1.16")
             });
-            HttpResponseMessage response = await client.SendAsync(request);
+            HttpResponseMessage response = await client.SendAsync(request, token);
             string responseJson = string.Empty;
 
             _syncTime = DateTime.Now;
@@ -205,13 +208,22 @@ namespace Tripwire
             return retList;
         }
 
-        private async Task EnsureData()
+        private async Task<bool> EnsureData()
         {
             if (jsonDocument == null)
             {
-                await Login();
-                await GetJsonData();
+                Connected= await Login(CancelToken);
+                if(!Connected)
+                    return false;
+                await GetJsonData(CancelToken);
             }
+            return true;
+        }
+
+        public async Task<bool> Start(CancellationToken token)
+        {
+            CancelToken = token;
+            return await EnsureData();
         }
 
         public async Task<IList<Signature>> GetSigs()

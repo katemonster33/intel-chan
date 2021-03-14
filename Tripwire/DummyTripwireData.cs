@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Tripwire
@@ -36,8 +37,14 @@ namespace Tripwire
                     Name=string.Empty,
                     SignatureID="yqw568",
                     SystemID="31000540",
+                    SystemName="J105342",
                     Type="wormhole"
             }});
+        }
+
+        public Task<bool> Start(CancellationToken token)
+        {
+            return Task.FromResult(true);
         }
     }
 }

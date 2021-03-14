@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using MySqlConnector;
 using Tripwire;
 
@@ -14,12 +16,42 @@ namespace Tripwire
         public IList<string> SystemIds { get => new List<string> { Config["HomeSystemId"] }; }
         private DateTime _syncTime;
         IConfiguration Config { get; }
+        ILogger<LocalTripwireData> Logger{get;}
 
-        public LocalTripwireData(IConfiguration configuration)
+        public LocalTripwireData(IConfiguration configuration, ILogger<LocalTripwireData> logger)
         {
             Config = configuration;
+            Logger=logger;
         }
 
+        public async Task<bool> Start(CancellationToken token)
+        {
+            
+            bool connected = false;
+            while (!connected)
+            {
+                if(token.IsCancellationRequested)
+                    return false;
+                
+                using var conn = GetConnection();
+                try
+                {
+                    await conn.OpenAsync(token);
+                    connected = true;
+                    Logger.LogInformation("Tripwire database is up");
+                }
+                catch(OperationCanceledException)
+                {
+                    Logger.LogInformation("Operation cancelled");
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError("Could not connect to database: " + ex.ToString());
+                }
+            }
+            return connected;
+        }
 
         public async Task<IList<Wormhole>> GetHoles()
         {
@@ -40,7 +72,7 @@ namespace Tripwire
                 if (reader["parent"] != DBNull.Value)
                     newHole.Parent = reader.GetString("parent").ToString();
                 retList.Add(newHole);
-                
+
             }
             _syncTime = DateTime.Now;
             return retList;
@@ -49,8 +81,12 @@ namespace Tripwire
         public async Task<IList<Signature>> GetSigs()
         {
             using var conn = GetConnection();
-            //get all signatures which are wormholes in systems which have wormholes
-            using var cmd = new MySqlCommand("select * from signatures where systemid in (select distinct systemid from signatures s where type='wormhole') and type='wormhole';", conn);
+            using var cmd = new MySqlCommand(@"select s.*,m.solarSystemName from signatures s
+            INNER JOIN eve_dumper.mapSolarSystems m
+            ON m.solarSystemID=s.systemid
+            where systemid in (select distinct systemid from signatures s where type='wormhole') 
+                and type='wormhole'
+                and m.security < 0.5;", conn);
             await conn.OpenAsync();
             using var reader = await cmd.ExecuteReaderAsync();
             var retList = new List<Signature>();
@@ -71,7 +107,8 @@ namespace Tripwire
                         ModifiedByName = reader.GetString("modifiedByName"),
                         ModifiedTime = reader.GetDateTime("modifiedTime").ToString(),
                         SystemID = reader.GetInt32("systemID").ToString(),
-                        Type = reader.GetString("type")
+                        Type = reader.GetString("type"),
+                        SystemName = reader.GetString("solarSystemName")
                     };
                 if (reader["name"] != DBNull.Value)
                     newSig.Name = reader.GetString("name");
@@ -85,6 +122,9 @@ namespace Tripwire
 
         private MySqlConnection GetConnection()
         {
+            var connStr = Config.GetConnectionString(ConnectionString);
+            if(string.IsNullOrEmpty(connStr))
+                throw new ApplicationException("No connection string found");
             return new MySqlConnection(Config.GetConnectionString(ConnectionString));
         }
     }

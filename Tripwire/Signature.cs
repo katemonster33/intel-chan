@@ -48,5 +48,7 @@ namespace Tripwire
 
         [JsonPropertyName("maskID")]
         public string MaskID { get; set; }
+
+        public string SystemName {get;set;}
     }
 }

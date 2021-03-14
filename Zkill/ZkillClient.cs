@@ -76,10 +76,11 @@ namespace Zkill
             while (zkillConnection.State == WebSocketState.Open)
             {
                 WebSocketReceiveResult result = null;
-                Logger.LogDebug("Waiting for data from zkill");
+                Logger.LogInformation("Waiting for data from zkill");
                 try
                 {
                     result = await zkillConnection.ReceiveAsync(buffer, CancelToken);
+                    Logger.LogInformation("Data received from zKill");
                 }
                 catch(TaskCanceledException)
                 {

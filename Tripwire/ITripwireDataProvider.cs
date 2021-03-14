@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Tripwire
@@ -11,7 +12,7 @@ namespace Tripwire
         Task<IList<Wormhole>> GetHoles();
         Task<IList<Signature>> GetSigs();
 
-
+        Task<bool> Start(CancellationToken token);
     }
     
 }

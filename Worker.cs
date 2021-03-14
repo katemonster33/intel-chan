@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Groupme;
@@ -38,34 +39,41 @@ namespace IntelChan
 
             if (!ZkillClient.Connected)
             {
-                Console.WriteLine("Could not connect to Zkill.");
-                Environment.Exit(-1);
+                Logger.LogWarning("Could not connect to Zkill.");
+
+                return;
             }
             ZkillClient.KillReceived += async (sender, link) =>
             {
                 await GroupmeBot?.Post(link);
             };
-            Console.WriteLine("Tripwire / Zkill connection successful, kill report subscriptions should commence shortly.");
-            Logger.LogInformation("Ready");
+
+            await TripwireLogic.StartAsync(token);
+
+            if(!TripwireLogic.Connected)
+                return;
+
+            Logger.LogInformation("Tripwire / Zkill connection successful, kill report subscriptions should commence shortly.");
             List<string> subscribedSystemIds = new List<string>();
+            List<WormholeSystem> currentSystems=null;
             do
             {
                 if (!ZkillClient.Connected)
-                {
                     await ZkillClient.ConnectAsync(token);
-                }
-
 
                 var response = await TripwireLogic.GetChains();
+
                 DateTime syncTime = TripwireLogic.SyncTime;
                 if (response.Count > 0)
                 {
-                    List<string> systemIds = new List<string>();
+                    var systems = new List<WormholeSystem>();
+                    if(currentSystems == null)
+                        currentSystems = new List<WormholeSystem>(systems);
                     foreach (var chain in response)
                     {
-                        TripwireLogic.GetChainSystemIds(chain, ref systemIds);
+                        TripwireLogic.FlattenList(chain, ref systems);
                     }
-                    systemIds = systemIds.Distinct().ToList();
+                    var systemIds = systems.Select(x=>x.SystemId).Distinct();
 
                     List<string> addedSigs = systemIds.Except(subscribedSystemIds).ToList();
                     await ZkillClient.SubscribeSystems(addedSigs);
@@ -75,8 +83,23 @@ namespace IntelChan
                     if (addedSigs.Any() || removedSigs.Any())
                     {
                         subscribedSystemIds = new List<string>(systemIds);
-                        Console.WriteLine($"Subscribed to {addedSigs.Count} systems, unsubscribed from {removedSigs.Count} systems.");
-                        Logger.LogInformation($"Subscribed to {addedSigs.Count} systems, unsubscribed from {removedSigs.Count} systems.");
+                        var subbed=  new StringBuilder();
+                        var unsubbed=new StringBuilder();
+
+                        foreach(var sys in addedSigs){
+                            var system = systems.FirstOrDefault(x=>x.SystemId==sys);
+                            subbed.AppendLine($"{system.SystemName}");
+                        }
+                        foreach(var sys in removedSigs){
+                            var system = currentSystems.FirstOrDefault(x=>x.SystemId==sys);
+                            unsubbed.AppendLine($"{system.SystemName}");
+                        }
+                        //update currentsystems
+                        currentSystems = systems;
+
+                        Logger.LogInformation($"Subscribed to:{Environment.NewLine}{subbed.ToString()}");
+                        Logger.LogInformation($"UnSubscribed from:{Environment.NewLine}{unsubbed.ToString()}");
+                        Logger.LogInformation($"Subscribed to {addedSigs.Count} systems, unsubscribed from {removedSigs.Count} systems. Monitoring {subscribedSystemIds.Count()} systems.");
                     }
                 }
 
