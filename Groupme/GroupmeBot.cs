@@ -20,11 +20,7 @@ namespace Groupme
         {
             Config = config;
             
-            this.accessToken = Config["groupme-access-token"];
             this.botId = Config["groupme-bot-id"];
-
-            if(string.IsNullOrEmpty(accessToken))
-                throw new ApplicationException("missing config value for groupme-access-token");
 
             if(string.IsNullOrEmpty(botId))
                 throw new ApplicationException("missing config value for groupme-bot-id");

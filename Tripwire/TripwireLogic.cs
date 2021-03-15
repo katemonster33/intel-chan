@@ -2,28 +2,33 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
-
+using Microsoft.Extensions.Logging;
+using System.Threading;
 
 namespace Tripwire
 {
     public class TripwireLogic
     {
         ITripwireDataProvider DataProvider { get; }
-        public TripwireLogic(ITripwireDataProvider dataProvier)
+        public bool Connected{get;set;}
+        ILogger<TripwireLogic> Logger{get;}
+        public TripwireLogic(ITripwireDataProvider dataProvier, ILogger<TripwireLogic> logger)
         {
             DataProvider = dataProvier;
+            Logger=logger;
         }
         public DateTime SyncTime { get => _syncTime; }
         DateTime _syncTime;
 
-        public WormholeSystem CreateSystem(Wormhole connection, string systemId, IList<Signature> signatures, IList<Wormhole> wormholes, int level)
+        public WormholeSystem CreateSystem(Wormhole connection, Signature signature, IList<Signature> signatures, IList<Wormhole> wormholes, int level)
         {
             WormholeSystem output = new WormholeSystem()
             {
-                SystemId = systemId,
-                Children = new List<KeyValuePair<Signature, WormholeSystem>>()
+                SystemId = signature.SystemID,
+                SystemName = signature.SystemName,
+                Children = new List<WormholeSystem>()
             };
-            List<Signature> systemSigs = signatures.Where(ss => ss.SystemID == systemId).ToList();
+            List<Signature> systemSigs = signatures.Where(ss => ss.SystemID == signature.SystemID).ToList();
             foreach (var sig in systemSigs)
             {
                 var hole = wormholes.FirstOrDefault(h => h.InitialID == sig.ID || h.SecondaryID == sig.ID);
@@ -35,28 +40,30 @@ namespace Tripwire
                     {
                         signatures.Remove(childSig);
                         wormholes.Remove(hole);
-                        output.Children.Add(new KeyValuePair<Signature, WormholeSystem>(sig, CreateSystem(hole, childSig.SystemID, signatures, wormholes, level + 1)));
+                        output.Children.Add(CreateSystem(hole, childSig, signatures, wormholes, level + 1));
                     }
                 }
             }
             return output;
         }
 
-        public void GetChainSystemIds(WormholeSystem chain, ref List<string> systemIds)
+        public async Task StartAsync(CancellationToken token)
         {
-            systemIds.Add(chain.SystemId);
+            Logger.LogInformation("Starting Tripwire Connection");
+            Connected = await DataProvider.Start(token);
+        }
+        public void FlattenList(WormholeSystem chain, ref List<WormholeSystem> systems)
+        {
+            systems.Add(chain);
             foreach (var wh in chain.Children)
             {
-                if (wh.Value != null)
-                {
-                    GetChainSystemIds(wh.Value, ref systemIds);
-                }
+                FlattenList(wh, ref systems);
             }
         }
 
         public async Task<IList<WormholeSystem>> GetChains()
         {
-
+            
             var tripwireSigs = await DataProvider.GetSigs();
             var tripwireHoles = await DataProvider.GetHoles();
             _syncTime = DataProvider.SyncTime;
@@ -69,7 +76,7 @@ namespace Tripwire
             var chains = new List<WormholeSystem>();
             foreach (var id in DataProvider.SystemIds)
             {
-                chains.Add(CreateSystem(null, id, tripwireSigs, tripwireHoles, 0));
+                chains.Add(CreateSystem(null, new Signature{SystemID=id,SystemName="Home"}, tripwireSigs, tripwireHoles, 0));
             }
             return chains;
         }

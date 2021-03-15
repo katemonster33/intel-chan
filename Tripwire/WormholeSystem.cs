@@ -6,7 +6,7 @@ namespace Tripwire
     {
         
         public string SystemId { get; set; }
-        
-        public List<KeyValuePair<Signature, WormholeSystem>> Children { get; set; }
+        public string SystemName{get;set;}
+        public IList<WormholeSystem> Children { get; set; }
     }
 }
