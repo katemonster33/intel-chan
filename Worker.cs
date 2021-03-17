@@ -96,10 +96,10 @@ namespace IntelChan
                         }
                         //update currentsystems
                         currentSystems = systems;
-
-                        Logger.LogInformation($"Subscribed to:{Environment.NewLine}{subbed.ToString()}");
-                        Logger.LogInformation($"UnSubscribed from:{Environment.NewLine}{unsubbed.ToString()}");
-                        Logger.LogInformation($"Subscribed to {addedSigs.Count} systems, unsubscribed from {removedSigs.Count} systems. Monitoring {subscribedSystemIds.Count()} systems.");
+                        if(addedSigs.Any())
+                            Logger.LogInformation($"Subscribed to:{Environment.NewLine}{subbed.ToString()}");
+                        if(removedSigs.Any())
+                            Logger.LogInformation($"UnSubscribed from:{Environment.NewLine}{unsubbed.ToString()}");
                     }
                 }
 
