@@ -7,8 +7,10 @@ namespace Zkill
 {
     public class DummyZkillClient : IZkillClient
     {
-        public bool Connected {get;set;}
-        public CancellationToken CancelToken{get;set;}
+        public bool Connected { get; set; }
+
+        public CancellationToken CancelToken { get; set; }
+
         public event EventHandler<string> KillReceived;
 
         Task readThread = null;
@@ -23,8 +25,6 @@ namespace Zkill
             }
 
             readThread = DoWork();
-            
-            
         }
 
         private Task DoWork()
@@ -54,8 +54,6 @@ namespace Zkill
         {
             return Task.CompletedTask;
         }
-
-    
 
         public Task UnsubscribeSystems(List<string> systemIds)
         {

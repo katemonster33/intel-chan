@@ -14,7 +14,7 @@ namespace Zkill
     public class ZkillClient : IDisposable, IZkillClient
     {
         ClientWebSocket zkillConnection;
-        CancellationToken CancelToken{get;set;}
+        CancellationToken CancelToken { get; set; }
         Task readThread = null;
 
         public event EventHandler<string> KillReceived;

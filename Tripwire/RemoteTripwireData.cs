@@ -9,22 +9,32 @@ using System.Linq;
 using Microsoft.Extensions.Configuration;
 using System.Net.WebSockets;
 using System.Threading;
+using System.IO.Compression;
+using System.IO;
 
 namespace Tripwire
 {
-    public class TripwireData : ITripwireDataProvider
+    public class RemoteTripwireData : ITripwireDataProvider
     {
-        public bool Connected{get;set;}
-        CancellationToken CancelToken{get;set;}
+        public bool Connected { get; set; }
+
+        CancellationToken CancelToken { get; set; }
+
         List<string> systemIds = new List<string>();
+
         public IList<string> SystemIds { get => systemIds; }
+
         string phpSessionId = string.Empty;
+
         JsonDocument jsonDocument;
+
         IConfiguration Configuration { get; }
+
         public DateTime SyncTime { get => _syncTime; }
 
         DateTime _syncTime;
-        public TripwireData(IConfiguration config)
+
+        public RemoteTripwireData(IConfiguration config)
         {
             Configuration = config;
         }
@@ -33,7 +43,7 @@ namespace Tripwire
         {
             using HttpClient client = new();
 
-            var request = new HttpRequestMessage(HttpMethod.Get, "https://dsyn-tripwire.centralus.cloudapp.azure.com/");
+            var request = new HttpRequestMessage(HttpMethod.Get, "https://tripwire.eve-apps.com/");
             Utilities.PopulateUserAgent(request.Headers);
 
             request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/html"));
@@ -75,7 +85,7 @@ namespace Tripwire
 
             using HttpClient client = new();
 
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://dsyn-tripwire.centralus.cloudapp.azure.com/login.php");
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://tripwire.eve-apps.com/login.php");
             Utilities.PopulateUserAgent(request.Headers);
 
             request.Headers.Add("Cookie", $"_ga=GA1.2.728460138.1609098244; PHPSESSID={phpSessionId}; _gid=GA1.2.732828563.1615002251; _gat=1");
@@ -120,20 +130,25 @@ namespace Tripwire
             {
                 return false;
             }
-            JsonDocument initJson = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-            string responseHtml = await response.Content.ReadAsStringAsync();
-            if (initJson == null || !initJson.RootElement.TryGetProperty("result", out JsonElement result) || result.GetString() != "success")
+            using(var stream = response.Content.ReadAsStream())
+            using(var gzipStream = new GZipStream(stream, CompressionMode.Decompress))
+            using (JsonDocument initJson = JsonDocument.Parse(gzipStream))
             {
-                return false;
-            }
-            if (!systemIds.Any())
-            {
-                var tabs = initJson.RootElement.GetProperty("session").GetProperty("options").GetProperty("chain").GetProperty("tabs");
-                foreach (var tab in tabs.EnumerateArray())
+                if (initJson == null || !initJson.RootElement.TryGetProperty("result", out JsonElement result) || result.GetString() != "success")
                 {
-                    systemIds.Add(tab.GetProperty("systemID").GetString());
+                    return false;
+                }
+                if (!systemIds.Any())
+                {
+                    var tabs = initJson.RootElement.GetProperty("session").GetProperty("options").GetProperty("chain").GetProperty("tabs");
+                    foreach (var tab in tabs.EnumerateArray())
+                    {
+                        systemIds.Add(tab.GetProperty("systemID").GetString());
+                    }
                 }
             }
+
+            
             return true;
         }
 
@@ -146,7 +161,7 @@ namespace Tripwire
 
             using HttpClient client = new();
 
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://dsyn-tripwire.centralus.cloudapp.azure.com/refresh.php");
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://tripwire.eve-apps.com/refresh.php");
             Utilities.PopulateUserAgent(request.Headers);
             request.Headers.Add("Cookie", $"_ga=GA1.2.728460138.1609098244; PHPSESSID={phpSessionId}; _gid=GA1.2.732828563.1615002251; _gat=1");
             request.Headers.Add("X-Requested-With", "XMLHttpRequest");
