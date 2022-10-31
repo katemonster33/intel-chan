@@ -1,5 +1,6 @@
 ﻿using System.Threading.Tasks;
-using Groupme;
+using IntelChan.Bot;
+using IntelChan.Bot.Discord;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Tripwire;
@@ -19,8 +20,8 @@ namespace IntelChan
             .ConfigureServices((hostContext,myServices) =>
             {
                 myServices.AddHostedService<Worker>();
-                myServices.AddSingleton<IGroupmeBot,DummyGroupmeBot>();
-                myServices.AddSingleton<ITripwireDataProvider,LocalTripwireData>();
+                myServices.AddSingleton<IChatBot, DiscordChatBot>();
+                myServices.AddSingleton<ITripwireDataProvider,RemoteTripwireData>();
                 myServices.AddSingleton<IZkillClient,ZkillClient>();
                 myServices.AddSingleton<TripwireLogic>();
                 

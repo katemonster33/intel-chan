@@ -10,13 +10,17 @@ namespace Tripwire
     public class TripwireLogic
     {
         ITripwireDataProvider DataProvider { get; }
-        public bool Connected{get;set;}
-        ILogger<TripwireLogic> Logger{get;}
+
+        public bool Connected { get; set; }
+
+        ILogger<TripwireLogic> Logger { get; }
+
         public TripwireLogic(ITripwireDataProvider dataProvier, ILogger<TripwireLogic> logger)
         {
             DataProvider = dataProvier;
-            Logger=logger;
+            Logger = logger;
         }
+
         public DateTime SyncTime { get => _syncTime; }
         DateTime _syncTime;
 
@@ -52,6 +56,7 @@ namespace Tripwire
             Logger.LogInformation("Starting Tripwire Connection");
             Connected = await DataProvider.Start(token);
         }
+
         public void FlattenList(WormholeSystem chain, ref List<WormholeSystem> systems)
         {
             systems.Add(chain);
