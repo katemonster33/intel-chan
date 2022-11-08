@@ -16,7 +16,7 @@ namespace Tripwire
         public IList<string> SystemIds { get => new List<string> { Config["HomeSystemId"] }; }
         private DateTime _syncTime;
         IConfiguration Config { get; }
-        ILogger<LocalTripwireData> Logger{get;}
+        ILogger<LocalTripwireData> Logger { get; }
 
         public LocalTripwireData(IConfiguration configuration, ILogger<LocalTripwireData> logger)
         {

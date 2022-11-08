@@ -5,6 +5,7 @@ using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -39,10 +40,61 @@ namespace IntelChan.Bot.Discord
 
             _client.Disconnected += _client_Disconnected;
 
+            _client.MessageReceived += _client_MessageReceived;
+
             discordBotToken = Config["discord-token"];
 
             if (string.IsNullOrEmpty(discordBotToken))
                 throw new ApplicationException("missing config value for discord-token");
+        }
+
+        async Task ProcessChainpathCommandAsync(string messageUser, string suppliedUser)
+        {
+
+        }
+
+        async Task _client_MessageReceived(SocketMessage arg)
+        {
+            if (arg == null) throw new ArgumentNullException(nameof(arg));
+            if(arg.Channel != textChannel)
+            {
+                return;
+            }
+            if (arg.MentionedUsers.Contains(_client.CurrentUser))
+            {
+
+            }
+            else if (arg.Content.StartsWith("!"))
+            {
+                // attempt to process command
+                string commandName = string.Empty;
+                string remainder = string.Empty;
+                int firstSpaceIndex = arg.Content.IndexOf(' ');
+                if (firstSpaceIndex == -1)
+                {
+                    commandName = arg.Content.Substring(1);
+                }
+                else
+                {
+                    commandName = arg.Content.Substring(1, firstSpaceIndex);
+                    remainder = arg.Content.Substring(firstSpaceIndex + 1);
+                }
+                string reply = string.Empty;
+                switch (commandName)
+                {
+                    case "chainpath":
+                        {
+                            var cmdArgs = new PathCommandArgs() { Character = remainder };
+                            HandlePathCommand?.Invoke(this, cmdArgs);
+                            reply = cmdArgs.Response;
+                        }
+                        break;
+                }
+                if(!string.IsNullOrEmpty(reply))
+                {
+                    await textChannel.SendMessageAsync(reply);
+                }
+            }
         }
 
         private Task _client_Ready()

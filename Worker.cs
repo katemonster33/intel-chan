@@ -48,6 +48,7 @@ namespace IntelChan
                 Logger.LogWarning("Could not connect to discord.");
                 return;
             }
+            ChatBot.HandlePathCommand += ChatBot_HandlePathCommand;
 
             //await ChatBot.Post("Reactor online. Sensors online. Weapons online. All systems nominal.");
             //await ChatBot.Post("Am I alive?");
@@ -132,6 +133,14 @@ namespace IntelChan
 
             await ChatBot.DisconnectAsync();
             ChatBot.Dispose();
+        }
+
+        private void ChatBot_HandlePathCommand(object sender, PathCommandArgs e)
+        {
+            if(TripwireLogic.Connected)
+            {
+
+            }
         }
 
         public Task StopAsync(CancellationToken cancellationToken)

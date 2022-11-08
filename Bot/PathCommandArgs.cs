@@ -8,8 +8,12 @@ namespace IntelChan.Bot
 {
     public class PathCommandArgs : EventArgs
     {
+        public string SourceUserName { get; set; }
+
         public string Character { get; set; }
 
         public string SystemName { get; set; }
+
+        public string Response { get; set; }
     }
 }

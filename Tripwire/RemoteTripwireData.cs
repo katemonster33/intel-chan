@@ -186,9 +186,12 @@ namespace Tripwire
 
             if (response.StatusCode != global::System.Net.HttpStatusCode.OK)
                 return;
-
-            jsonDocument = JsonDocument.Parse(response.Content.ReadAsStream());
-            _syncTime = DateTime.Parse(jsonDocument.RootElement.GetProperty("sync").GetString());
+            using(var stream = response.Content.ReadAsStream())
+            {
+                string json = new StreamReader(stream).ReadToEnd();
+                jsonDocument = JsonDocument.Parse(json);
+                _syncTime = DateTime.Parse(jsonDocument.RootElement.GetProperty("sync").GetString());
+            }
         }
 
 
