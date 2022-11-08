@@ -19,6 +19,21 @@ namespace Tripwire
             return Task.FromResult<IList<Wormhole>>(retList);
         }
 
+        public Task<IList<OccupiedSystem>> GetOccupiedSystems()
+        {
+            return Task.FromResult<IList<OccupiedSystem>>(new List<OccupiedSystem>());
+        }
+
+        public Task<IList<Occupant>> GetOccupants(string systemId)
+        {
+            return Task.FromResult<IList<Occupant>>(new List<Occupant>());
+        }
+
+        public Task RefreshData(CancellationToken token)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task<IList<Signature>> GetSigs()
         {
             return Task.FromResult<IList<Signature>>(new List<Signature>{

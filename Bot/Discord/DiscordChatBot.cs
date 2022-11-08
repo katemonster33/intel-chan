@@ -21,7 +21,7 @@ namespace IntelChan.Bot.Discord
 
         ITextChannel textChannel;
 
-        public event EventHandler<PathCommandArgs> HandlePathCommand;
+        public event Func<string, Task<string>> HandlePathCommand;
 
         IConfiguration Config { get; }
 
@@ -32,7 +32,7 @@ namespace IntelChan.Bot.Discord
             Config = config;
             Logger = logger;
 
-            _client = new DiscordSocketClient();
+            _client = new DiscordSocketClient(new DiscordSocketConfig(){GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent});
 
             _client.Log += Log;
 
@@ -46,11 +46,6 @@ namespace IntelChan.Bot.Discord
 
             if (string.IsNullOrEmpty(discordBotToken))
                 throw new ApplicationException("missing config value for discord-token");
-        }
-
-        async Task ProcessChainpathCommandAsync(string messageUser, string suppliedUser)
-        {
-
         }
 
         async Task _client_MessageReceived(SocketMessage arg)
@@ -82,12 +77,8 @@ namespace IntelChan.Bot.Discord
                 string reply = string.Empty;
                 switch (commandName)
                 {
-                    case "chainpath":
-                        {
-                            var cmdArgs = new PathCommandArgs() { Character = remainder };
-                            HandlePathCommand?.Invoke(this, cmdArgs);
-                            reply = cmdArgs.Response;
-                        }
+                    case "path":
+                        reply = await HandlePathCommand?.Invoke(remainder);
                         break;
                 }
                 if(!string.IsNullOrEmpty(reply))
@@ -131,11 +122,6 @@ namespace IntelChan.Bot.Discord
             await _client.LogoutAsync();
             IsConnected = false;
             textChannel = null;
-        }
-
-        public void OnChainPathCommand(string characterName)
-        {
-            HandlePathCommand?.Invoke(this, new PathCommandArgs() { Character = characterName });
         }
 
         public async Task Post(string message)

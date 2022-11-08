@@ -4,6 +4,7 @@ namespace Tripwire
 {
     public class WormholeSystem
     {
+        public WormholeSystem Parent { get; set; }
         
         public string SystemId { get; set; }
         public string SystemName{get;set;}

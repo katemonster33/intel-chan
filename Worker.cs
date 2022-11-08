@@ -10,6 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Tripwire;
 using Zkill;
+using EveSde;
 
 namespace IntelChan
 {
@@ -24,14 +25,17 @@ namespace IntelChan
         TripwireLogic TripwireLogic { get; }
         IChatBot ChatBot { get; }
 
+        IEveSdeClient SdeClient { get; }
 
-        public Worker(IZkillClient zkillClient, IChatBot chatBot, TripwireLogic tripwire, ILogger<Worker> logger, IServiceProvider services)
+
+        public Worker(IZkillClient zkillClient, IChatBot chatBot, TripwireLogic tripwire, ILogger<Worker> logger, IServiceProvider services, IEveSdeClient sdeClient)
         {
             Services = services;
             ZkillClient = zkillClient;
             ChatBot = chatBot;
             TripwireLogic = tripwire;
             Logger = logger;
+            SdeClient = sdeClient;
         }
 
         public async Task StartAsync(CancellationToken token)
@@ -135,12 +139,15 @@ namespace IntelChan
             ChatBot.Dispose();
         }
 
-        private void ChatBot_HandlePathCommand(object sender, PathCommandArgs e)
+        private async Task<string> ChatBot_HandlePathCommand(string user)
         {
+            string output = string.Empty;
             if(TripwireLogic.Connected)
             {
+                var response = await TripwireLogic.GetChains();
 
             }
+            return output;
         }
 
         public Task StopAsync(CancellationToken cancellationToken)

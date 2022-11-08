@@ -53,6 +53,21 @@ namespace Tripwire
             return connected;
         }
 
+        public Task RefreshData(CancellationToken token)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IList<Occupant>> GetOccupants(string systemId)
+        {
+            return Task.FromResult<IList<Occupant>>(new List<Occupant>());
+        }
+        
+        public Task<IList<OccupiedSystem>> GetOccupiedSystems()
+        {
+            return Task.FromResult<IList<OccupiedSystem>>(new List<OccupiedSystem>());
+        }
+
         public async Task<IList<Wormhole>> GetHoles()
         {
             using var conn = GetConnection();
