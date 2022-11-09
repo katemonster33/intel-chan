@@ -71,8 +71,16 @@ namespace IntelChan.Bot.Discord
                 }
                 else
                 {
-                    commandName = arg.Content.Substring(1, firstSpaceIndex);
+                    commandName = arg.Content.Substring(1, firstSpaceIndex - 1);
                     remainder = arg.Content.Substring(firstSpaceIndex + 1);
+                }
+                if(string.IsNullOrWhiteSpace(remainder) && arg.Author is SocketGuildUser guildUser)
+                {
+                    remainder = guildUser.DisplayName;
+                    if(remainder.StartsWith("[-DSYN] "))
+                    {
+                        remainder = remainder.Substring(8);
+                    }
                 }
                 string reply = string.Empty;
                 switch (commandName)

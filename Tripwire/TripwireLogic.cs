@@ -26,12 +26,13 @@ namespace Tripwire
         public DateTime SyncTime { get => _syncTime; }
         DateTime _syncTime;
 
-        public WormholeSystem CreateSystem(Wormhole connection, Signature signature, IList<Signature> signatures, IList<Wormhole> wormholes, WormholeSystem parent, int level)
+        public WormholeSystem CreateSystem(Wormhole connection, string parentSigId, Signature signature, IList<Signature> signatures, IList<Wormhole> wormholes, WormholeSystem parent, int level)
         {
             WormholeSystem output = new WormholeSystem()
             {
                 SystemId = signature.SystemID,
                 SystemName = signature.SystemName,
+                ParentSignatureId = parentSigId,
                 Parent = parent,
                 Children = new List<WormholeSystem>()
             };
@@ -47,7 +48,7 @@ namespace Tripwire
                     {
                         signatures.Remove(childSig);
                         wormholes.Remove(hole);
-                        output.Children.Add(CreateSystem(hole, childSig, signatures, wormholes, output, level + 1));
+                        output.Children.Add(CreateSystem(hole, sig.SignatureID, childSig, signatures, wormholes, output, level + 1));
                     }
                 }
             }
@@ -69,6 +70,26 @@ namespace Tripwire
             }
         }
 
+        public WormholeSystem FindSystem(string systemId, IEnumerable<WormholeSystem> systems)
+        {
+            foreach(var sys in systems)
+            {
+                if(sys.SystemId == systemId)
+                {
+                    return sys;
+                }
+                else
+                {
+                    var childSys = FindSystem(systemId, sys.Children);
+                    if(childSys != null)
+                    {
+                        return childSys;
+                    }
+                }
+            }
+            return null;
+        }
+
         public async Task<WormholeSystem> FindCharacter(string name)
         {
             IList<OccupiedSystem> occupiedSystems = await DataProvider.GetOccupiedSystems();
@@ -76,15 +97,25 @@ namespace Tripwire
             {
                 if(sys.count != "0")
                 {
-                    var occupants = DataProvider.GetOccupants(sys.systemID);
+                    var occupants = await DataProvider.GetOccupants(sys.systemID);
+                    foreach(var occ in occupants)
+                    {
+                        if(occ.characterName == name)
+                        {
+                            lock(cachedChains)
+                            {
+                                return FindSystem(sys.systemID, cachedChains);
+                            }
+                        }
+                    }
                 }
             }
             return null;
         }
 
-        public async Task<IList<WormholeSystem>> GetChains()
+        public async Task<IList<WormholeSystem>> GetChains(CancellationToken token)
         {
-            
+            await DataProvider.RefreshData(token);
             var tripwireSigs = await DataProvider.GetSigs();
             var tripwireHoles = await DataProvider.GetHoles();
             _syncTime = DataProvider.SyncTime;
@@ -97,7 +128,7 @@ namespace Tripwire
             var chains = new List<WormholeSystem>();
             foreach (var id in DataProvider.SystemIds)
             {
-                chains.Add(CreateSystem(null, new Signature{SystemID=id,SystemName="Home"}, tripwireSigs, tripwireHoles, null, 0));
+                chains.Add(CreateSystem(null, "???", new Signature{SystemID=id,SystemName="Home"}, tripwireSigs, tripwireHoles, null, 0));
             }
             lock(cachedChains)
             {

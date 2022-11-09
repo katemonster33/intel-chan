@@ -117,9 +117,9 @@ namespace Tripwire
                 using (JsonDocument initJson = JsonDocument.Parse(gzipStream))
                 {
                     var occJson = initJson.RootElement.GetProperty("occupants");
-                    foreach(var occ in occJson.EnumerateObject())
+                    foreach(var occ in occJson.EnumerateArray())
                     {
-                        occupants.Add(JsonSerializer.Deserialize<Occupant>(occ.Value.ToString()));
+                        occupants.Add(JsonSerializer.Deserialize<Occupant>(occ.ToString()));
                     }
                 }
             }
@@ -274,9 +274,9 @@ namespace Tripwire
                 lock(cachedOccupiedSystems)
                 {
                     cachedOccupiedSystems.Clear();
-                    foreach(var node in occupants.EnumerateObject())
+                    foreach(var node in occupants.EnumerateArray())
                     {
-                        var occ = JsonSerializer.Deserialize<OccupiedSystem>(node.Value.ToString());
+                        var occ = JsonSerializer.Deserialize<OccupiedSystem>(node.ToString());
                         cachedOccupiedSystems.Add(occ);
                     }
                 }
