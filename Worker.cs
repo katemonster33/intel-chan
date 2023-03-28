@@ -10,6 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Tripwire;
 using Zkill;
+using EveSde;
 
 namespace IntelChan
 {
@@ -24,18 +25,26 @@ namespace IntelChan
         TripwireLogic TripwireLogic { get; }
         IChatBot ChatBot { get; }
 
+        IEveSdeClient SdeClient { get; }
 
-        public Worker(IZkillClient zkillClient, IChatBot chatBot, TripwireLogic tripwire, ILogger<Worker> logger, IServiceProvider services)
+
+        public Worker(IZkillClient zkillClient, IChatBot chatBot, TripwireLogic tripwire, ILogger<Worker> logger, IServiceProvider services, IEveSdeClient sdeClient)
         {
             Services = services;
             ZkillClient = zkillClient;
             ChatBot = chatBot;
             TripwireLogic = tripwire;
             Logger = logger;
+            SdeClient = sdeClient;
         }
 
         public async Task StartAsync(CancellationToken token)
         {
+            if(!SdeClient.Start())
+            {
+                Logger.LogError("Could not load SDE contents");
+                return;
+            }
             await ChatBot.ConnectAsync(token);
 
             int startWaitTime = Environment.TickCount;
@@ -48,9 +57,11 @@ namespace IntelChan
                 Logger.LogWarning("Could not connect to discord.");
                 return;
             }
+            ChatBot.HandlePathCommand += ChatBot_HandlePathCommand;
 
             //await ChatBot.Post("Reactor online. Sensors online. Weapons online. All systems nominal.");
             //await ChatBot.Post("Am I alive?");
+            //await ChatBot.Post("Simp for me, meatbags.");
             await ZkillClient.ConnectAsync(token);
             if (!ZkillClient.Connected)
             {
@@ -79,7 +90,7 @@ namespace IntelChan
                 if (!ZkillClient.Connected)
                     await ZkillClient.ConnectAsync(token);
 
-                var response = await TripwireLogic.GetChains();
+                var response = await TripwireLogic.GetChains(token);
 
                 DateTime syncTime = TripwireLogic.SyncTime;
                 if (response.Count > 0)
@@ -132,6 +143,37 @@ namespace IntelChan
 
             await ChatBot.DisconnectAsync();
             ChatBot.Dispose();
+        }
+
+        private async Task<string> ChatBot_HandlePathCommand(string user)
+        {
+            string output = string.Empty;
+            if(TripwireLogic.Connected)
+            {
+                var response = await TripwireLogic.FindCharacter(user);
+                if(response == null)
+                {
+                    return "Character \"" + user + "\" not found in chain :(";
+                }
+                else
+                {
+                    output = SdeClient.GetName(uint.Parse(response.SystemId));
+                    var responseCopy = response;
+                    var parent = response.Parent;
+                    while(responseCopy.Parent != null)
+                    {
+                        string sig = "???";
+                        if(responseCopy.ParentSignatureId != null && responseCopy.ParentSignatureId.Length > 3)
+                        {
+                            sig = responseCopy.ParentSignatureId.Substring(0, 3).ToUpper();
+                        }
+                        output = SdeClient.GetName(uint.Parse(responseCopy.Parent.SystemId)) + " -> " + sig + "|" + output;
+                        responseCopy = responseCopy.Parent;
+                    }
+                    output = "Path to " + user + ": " + output;
+                }
+            }
+            return output;
         }
 
         public Task StopAsync(CancellationToken cancellationToken)

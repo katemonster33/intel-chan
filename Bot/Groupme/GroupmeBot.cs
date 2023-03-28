@@ -15,7 +15,7 @@ namespace IntelChan.Bot.Groupme
         string accessToken = string.Empty;
         string botId = string.Empty;
 
-        public event EventHandler<PathCommandArgs> HandlePathCommand;
+        public event Func<string, Task<string>> HandlePathCommand;
 
         IConfiguration Config { get; }
         public GroupmeBot(IConfiguration config)

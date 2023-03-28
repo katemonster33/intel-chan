@@ -16,7 +16,7 @@ namespace Tripwire
         public IList<string> SystemIds { get => new List<string> { Config["HomeSystemId"] }; }
         private DateTime _syncTime;
         IConfiguration Config { get; }
-        ILogger<LocalTripwireData> Logger{get;}
+        ILogger<LocalTripwireData> Logger { get; }
 
         public LocalTripwireData(IConfiguration configuration, ILogger<LocalTripwireData> logger)
         {
@@ -51,6 +51,21 @@ namespace Tripwire
                 }
             }
             return connected;
+        }
+
+        public Task RefreshData(CancellationToken token)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IList<Occupant>> GetOccupants(string systemId)
+        {
+            return Task.FromResult<IList<Occupant>>(new List<Occupant>());
+        }
+        
+        public Task<IList<OccupiedSystem>> GetOccupiedSystems()
+        {
+            return Task.FromResult<IList<OccupiedSystem>>(new List<OccupiedSystem>());
         }
 
         public async Task<IList<Wormhole>> GetHoles()

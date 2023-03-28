@@ -1,27 +1,26 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net6.0</TargetFramework>
     <UserSecretsId>3055347B-1519-4D6D-BACE-727E32EB33E9</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Discord.Net.Commands" Version="3.8.1" />
-    <PackageReference Include="Discord.Net.WebSocket" Version="3.8.1" />
-    <PackageReference Include="HtmlAgilityPack" Version="1.11.31" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="5.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="5.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="5.0.0" />
-    <PackageReference Include="MySqlConnector" Version="1.3.1" />
-    <PackageReference Include="System.Net.Websockets" Version="4.3.0" />
+    <PackageReference Include="Discord.Net.Commands" Version="3.8.1"/>
+    <PackageReference Include="Discord.Net.WebSocket" Version="3.8.1"/>
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.31"/>
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="5.0.0"/>
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="5.0.0"/>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="5.0.0"/>
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="5.0.0"/>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="5.0.1"/>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="5.0.0"/>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="5.0.0"/>
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="5.0.0"/>
+    <PackageReference Include="MySqlConnector" Version="1.3.1"/>
+    <PackageReference Include="System.Net.Websockets" Version="4.3.0"/>
+    <PackageReference Include="YamlDotNet.NetCore" Version="1.0.0"/>
   </ItemGroup>
-
   <ItemGroup>
-    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
-
 </Project>

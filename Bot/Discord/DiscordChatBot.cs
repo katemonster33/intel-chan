@@ -5,6 +5,7 @@ using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,7 +21,7 @@ namespace IntelChan.Bot.Discord
 
         ITextChannel textChannel;
 
-        public event EventHandler<PathCommandArgs> HandlePathCommand;
+        public event Func<string, Task<string>> HandlePathCommand;
 
         IConfiguration Config { get; }
 
@@ -31,7 +32,7 @@ namespace IntelChan.Bot.Discord
             Config = config;
             Logger = logger;
 
-            _client = new DiscordSocketClient();
+            _client = new DiscordSocketClient(new DiscordSocketConfig(){GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent});
 
             _client.Log += Log;
 
@@ -39,10 +40,60 @@ namespace IntelChan.Bot.Discord
 
             _client.Disconnected += _client_Disconnected;
 
+            _client.MessageReceived += _client_MessageReceived;
+
             discordBotToken = Config["discord-token"];
 
             if (string.IsNullOrEmpty(discordBotToken))
                 throw new ApplicationException("missing config value for discord-token");
+        }
+
+        async Task _client_MessageReceived(SocketMessage arg)
+        {
+            if (arg == null) throw new ArgumentNullException(nameof(arg));
+            if(arg.Channel != textChannel)
+            {
+                return;
+            }
+            if (arg.MentionedUsers.Contains(_client.CurrentUser))
+            {
+
+            }
+            else if (arg.Content.StartsWith("!"))
+            {
+                // attempt to process command
+                string commandName = string.Empty;
+                string remainder = string.Empty;
+                int firstSpaceIndex = arg.Content.IndexOf(' ');
+                if (firstSpaceIndex == -1)
+                {
+                    commandName = arg.Content.Substring(1);
+                }
+                else
+                {
+                    commandName = arg.Content.Substring(1, firstSpaceIndex - 1);
+                    remainder = arg.Content.Substring(firstSpaceIndex + 1);
+                }
+                if(string.IsNullOrWhiteSpace(remainder) && arg.Author is SocketGuildUser guildUser)
+                {
+                    remainder = guildUser.DisplayName;
+                    if(remainder.StartsWith("[-DSYN] "))
+                    {
+                        remainder = remainder.Substring(8);
+                    }
+                }
+                string reply = string.Empty;
+                switch (commandName)
+                {
+                    case "path":
+                        reply = await HandlePathCommand?.Invoke(remainder);
+                        break;
+                }
+                if(!string.IsNullOrEmpty(reply))
+                {
+                    await textChannel.SendMessageAsync(reply);
+                }
+            }
         }
 
         private Task _client_Ready()
@@ -79,11 +130,6 @@ namespace IntelChan.Bot.Discord
             await _client.LogoutAsync();
             IsConnected = false;
             textChannel = null;
-        }
-
-        public void OnChainPathCommand(string characterName)
-        {
-            HandlePathCommand?.Invoke(this, new PathCommandArgs() { Character = characterName });
         }
 
         public async Task Post(string message)

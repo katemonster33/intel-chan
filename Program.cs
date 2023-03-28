@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Tripwire;
 using Zkill;
+using EveSde;
 
 namespace IntelChan
 {
@@ -23,6 +24,7 @@ namespace IntelChan
                 myServices.AddSingleton<IChatBot, DiscordChatBot>();
                 myServices.AddSingleton<ITripwireDataProvider,RemoteTripwireData>();
                 myServices.AddSingleton<IZkillClient,ZkillClient>();
+                myServices.AddSingleton<IEveSdeClient, EveSdeClient>();
                 myServices.AddSingleton<TripwireLogic>();
                 
             });

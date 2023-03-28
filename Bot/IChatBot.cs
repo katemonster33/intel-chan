@@ -15,7 +15,7 @@ namespace IntelChan.Bot
 
         Task Post(string message);
 
-        event EventHandler<PathCommandArgs> HandlePathCommand;
+        event Func<string, Task<string>> HandlePathCommand;
         
     }
 }

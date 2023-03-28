@@ -24,6 +24,12 @@ namespace Tripwire
 
         public IList<string> SystemIds { get => systemIds; }
 
+        List<Wormhole> cachedHoles = new List<Wormhole>();
+
+        List<Signature> cachedSigs = new List<Signature>();
+
+        List<OccupiedSystem> cachedOccupiedSystems = new List<OccupiedSystem>();
+
         string phpSessionId = string.Empty;
 
         JsonDocument jsonDocument;
@@ -33,6 +39,7 @@ namespace Tripwire
         public DateTime SyncTime { get => _syncTime; }
 
         DateTime _syncTime;
+        long epochTimestamp = 0;
 
         public RemoteTripwireData(IConfiguration config)
         {
@@ -73,6 +80,52 @@ namespace Tripwire
                 }
             }
             return !string.IsNullOrEmpty(phpSessionId);
+        }
+        
+        public async Task<IList<Occupant>> GetOccupants(string systemId)
+        {
+            using HttpClient client = new();
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://tripwire.eve-apps.com/occupants.php");
+            Utilities.PopulateUserAgent(request.Headers);
+
+            request.Headers.Add("Cookie", $"_ga=GA1.2.728460138.1609098244; PHPSESSID={phpSessionId}; _gid=GA1.2.732828563.1615002251; _gat=1");
+
+            request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+            request.Headers.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("gzip"));
+            request.Headers.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("deflate"));
+            request.Headers.AcceptEncoding.Add(new System.Net.Http.Headers.StringWithQualityHeaderValue("br"));
+
+            if(epochTimestamp == 0)
+            {
+                epochTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            }
+
+            request.Content = new FormUrlEncodedContent(new List<KeyValuePair<string, string>>()
+            {
+                new KeyValuePair<string, string>("systemID", systemId),
+                new KeyValuePair<string, string>("_", ""),
+            });
+            
+            var response = await client.SendAsync(request);
+
+            List<Occupant> occupants = new List<Occupant>();
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                using(var stream = response.Content.ReadAsStream())
+                using(var gzipStream = new GZipStream(stream, CompressionMode.Decompress))
+                using (JsonDocument initJson = JsonDocument.Parse(gzipStream))
+                {
+                    var occJson = initJson.RootElement.GetProperty("occupants");
+                    foreach(var occ in occJson.EnumerateArray())
+                    {
+                        occupants.Add(JsonSerializer.Deserialize<Occupant>(occ.ToString()));
+                    }
+                }
+            }
+
+            epochTimestamp++;
+            return occupants;
         }
 
         private async Task<bool> Login(CancellationToken token)
@@ -151,13 +204,11 @@ namespace Tripwire
             
             return true;
         }
-
-
-        private async Task GetJsonData(CancellationToken token)
+        
+        public async Task RefreshData(CancellationToken token)
         {
-            List<Signature> tripwireSigs = new List<Signature>();
-            List<Wormhole> tripwireHoles = new List<Wormhole>();
-            List<WormholeSystem> chains = new List<WormholeSystem>();
+            cachedSigs = new List<Signature>();
+            cachedHoles = new List<Wormhole>();
 
             using HttpClient client = new();
 
@@ -186,67 +237,88 @@ namespace Tripwire
 
             if (response.StatusCode != global::System.Net.HttpStatusCode.OK)
                 return;
-
-            jsonDocument = JsonDocument.Parse(response.Content.ReadAsStream());
-            _syncTime = DateTime.Parse(jsonDocument.RootElement.GetProperty("sync").GetString());
-        }
-
-
-
-        private void GetHoles(List<Wormhole> tripwireHoles, JsonDocument doc)
-        {
-            var wormholes = doc.RootElement.GetProperty("wormholes");
-            foreach (var node in wormholes.EnumerateObject())
+            using(var stream = response.Content.ReadAsStream())
             {
-                tripwireHoles.Add(JsonSerializer.Deserialize<Wormhole>(node.Value.ToString()));
+                string json = new StreamReader(stream).ReadToEnd();
+                jsonDocument = JsonDocument.Parse(json);
+                _syncTime = DateTime.Parse(jsonDocument.RootElement.GetProperty("sync").GetString());
             }
-        }
-
-        private void GetSigs(List<Signature> tripwireSigs, JsonDocument doc)
-        {
-            var sigs = doc.RootElement.GetProperty("signatures");
-            foreach (var node in sigs.EnumerateObject())
+            if(jsonDocument.RootElement.TryGetProperty("wormholes", out var wormholes))
             {
-                var sig = JsonSerializer.Deserialize<Signature>(node.Value.ToString());
-                if (sig.SystemID != null && sig.SystemID.Length > 3)
+                lock(cachedHoles)
                 {
-                    tripwireSigs.Add(sig);
+                    cachedHoles.Clear();
+                    foreach (var node in wormholes.EnumerateObject())
+                    {
+                        cachedHoles.Add(JsonSerializer.Deserialize<Wormhole>(node.Value.ToString()));
+                    }
                 }
             }
-        }
-
-        public async Task<IList<Wormhole>> GetHoles()
-        {
-            await EnsureData();
-            var retList = new List<Wormhole>();
-            GetHoles(retList, jsonDocument);
-            return retList;
-        }
-
-        private async Task<bool> EnsureData()
-        {
-            if (jsonDocument == null)
+            if(jsonDocument.RootElement.TryGetProperty("signatures", out var sigs))
             {
-                Connected= await Login(CancelToken);
-                if(!Connected)
-                    return false;
-                await GetJsonData(CancelToken);
+                lock(cachedSigs)
+                {
+                    cachedSigs.Clear();
+                    foreach (var node in sigs.EnumerateObject())
+                    {
+                        var sig = JsonSerializer.Deserialize<Signature>(node.Value.ToString());
+                        if (sig.SystemID != null && sig.SystemID.Length > 3)
+                        {
+                            cachedSigs.Add(sig);
+                        }
+                    }
+                }
             }
-            return true;
+            if(jsonDocument.RootElement.TryGetProperty("occupied", out var occupants))
+            {
+                lock(cachedOccupiedSystems)
+                {
+                    cachedOccupiedSystems.Clear();
+                    foreach(var node in occupants.EnumerateArray())
+                    {
+                        var occ = JsonSerializer.Deserialize<OccupiedSystem>(node.ToString());
+                        cachedOccupiedSystems.Add(occ);
+                    }
+                }
+                
+            }
+        }
+
+        public Task<IList<OccupiedSystem>> GetOccupiedSystems()
+        {
+            List<OccupiedSystem> occupiedSystems = new List<OccupiedSystem>();
+            lock(cachedOccupiedSystems)
+            {
+                occupiedSystems.AddRange(cachedOccupiedSystems);
+            }
+            return Task.FromResult<IList<OccupiedSystem>>(occupiedSystems);
+        }
+
+        public Task<IList<Wormhole>> GetHoles()
+        {
+            List<Wormhole> wormholes = new List<Wormhole>();
+            lock (cachedHoles)
+            {
+                wormholes.AddRange(cachedHoles);
+            }
+            return Task.FromResult<IList<Wormhole>>(wormholes);
         }
 
         public async Task<bool> Start(CancellationToken token)
         {
             CancelToken = token;
-            return await EnsureData();
+            Connected = await Login(CancelToken);
+            return Connected;
         }
 
-        public async Task<IList<Signature>> GetSigs()
+        public Task<IList<Signature>> GetSigs()
         {
-            await EnsureData();
-            var retLIst = new List<Signature>();
-            GetSigs(retLIst, jsonDocument);
-            return retLIst;
+            List<Signature> sigs = new List<Signature>();
+            lock (cachedSigs)
+            {
+                sigs.AddRange(cachedSigs);
+            }
+            return Task.FromResult<IList<Signature>>(sigs);
         }
     }
 
