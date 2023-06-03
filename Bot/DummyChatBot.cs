@@ -10,6 +10,7 @@ namespace IntelChan.Bot
         public bool IsConnected { get; private set; }
 
         public event Func<string, Task<string>> HandlePathCommand;
+        public event Func<string, byte[], Task<string>> HandleDrawCommand;
 
         public Task ConnectAsync(CancellationToken token)
         {

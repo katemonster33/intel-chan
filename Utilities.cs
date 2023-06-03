@@ -33,6 +33,21 @@ namespace IntelChan
             headers.UserAgent.Add(new ProductInfoHeaderValue("Safari", "537.36"));
         }
 
+        public static async Task<byte[]> Download(string url)
+        {
+            byte[] output = null;
+            HttpClient client = new HttpClient();
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            PopulateUserAgent(request.Headers);
+            var resp = await client.SendAsync(request);
+            if(resp.StatusCode == System.Net.HttpStatusCode.OK )
+            {
+                output = await resp.Content.ReadAsByteArrayAsync();
+            }
+            client.Dispose();
+            return output;
+        }
+
         public static Task<HttpResponseMessage> GetHttp(HttpClient client, string url)
         {
             var request = new HttpRequestMessage(HttpMethod.Get, url);

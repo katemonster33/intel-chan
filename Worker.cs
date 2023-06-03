@@ -11,6 +11,11 @@ using Microsoft.Extensions.Logging;
 using Tripwire;
 using Zkill;
 using EveSde;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.IO;
+using System.Buffers.Text;
+using System.Text.Json;
 
 namespace IntelChan
 {
@@ -27,6 +32,9 @@ namespace IntelChan
 
         IEveSdeClient SdeClient { get; }
 
+        const string jitaSystemId = "30000142";
+        const string amarrSystemId = "30002187";
+
 
         public Worker(IZkillClient zkillClient, IChatBot chatBot, TripwireLogic tripwire, ILogger<Worker> logger, IServiceProvider services, IEveSdeClient sdeClient)
         {
@@ -40,6 +48,7 @@ namespace IntelChan
 
         public async Task StartAsync(CancellationToken token)
         {
+            string[] ignoredSystemIds = {jitaSystemId, amarrSystemId};
             if(!SdeClient.Start())
             {
                 Logger.LogError("Could not load SDE contents");
@@ -58,6 +67,7 @@ namespace IntelChan
                 return;
             }
             ChatBot.HandlePathCommand += ChatBot_HandlePathCommand;
+            ChatBot.HandleDrawCommand += ChatBot_HandleDrawCommand;
 
             //await ChatBot.Post("Reactor online. Sensors online. Weapons online. All systems nominal.");
             //await ChatBot.Post("Am I alive?");
@@ -74,6 +84,8 @@ namespace IntelChan
                 await ChatBot?.Post(link);
             };
 
+            await ZkillClient.SubscribeCorps(new List<string>(){"98277602", "98725923"});
+
             await TripwireLogic.StartAsync(token);
 
             if (!TripwireLogic.Connected)
@@ -88,7 +100,11 @@ namespace IntelChan
             do
             {
                 if (!ZkillClient.Connected)
+                {
                     await ZkillClient.ConnectAsync(token);
+                    
+                    await ZkillClient.SubscribeCorps(new List<string>(){"98277602", "98725923"});
+                }
 
                 var response = await TripwireLogic.GetChains(token);
 
@@ -102,7 +118,7 @@ namespace IntelChan
                     {
                         TripwireLogic.FlattenList(chain, ref systems);
                     }
-                    var systemIds = systems.Select(x => x.SystemId).Distinct();
+                    var systemIds = systems.Select(x => x.SystemId).Except(ignoredSystemIds).Distinct();
 
                     List<string> addedSigs = systemIds.Except(subscribedSystemIds).ToList();
                     await ZkillClient.SubscribeSystems(addedSigs);
@@ -118,12 +134,12 @@ namespace IntelChan
                         foreach (var sys in addedSigs)
                         {
                             var system = systems.FirstOrDefault(x => x.SystemId == sys);
-                            subbed.AppendLine($"{system.SystemName}");
+                            subbed.AppendLine($"{SdeClient.GetName(uint.Parse(system.SystemId))}");
                         }
                         foreach (var sys in removedSigs)
                         {
                             var system = currentSystems.FirstOrDefault(x => x.SystemId == sys);
-                            unsubbed.AppendLine($"{system.SystemName}");
+                            unsubbed.AppendLine($"{SdeClient.GetName(uint.Parse(system.SystemId))}");
                         }
                         //update currentsystems
                         currentSystems = systems;
@@ -141,8 +157,63 @@ namespace IntelChan
             }
             while (true);
 
+            await ZkillClient.DisconnectAsync();
+            ZkillClient.Dispose();
+
             await ChatBot.DisconnectAsync();
             ChatBot.Dispose();
+        }
+
+        private async Task<string> ChatBot_HandleDrawCommand(string arg, byte[] data)
+        {
+            HttpClient client = new HttpClient();
+            client.BaseAddress = new Uri("http://127.0.0.1:7860");
+            string prompt = "", neg_prompt = "nsfw, nudity", sampler = "Euler a";
+            int width = 512, height = 512;
+            string[] tokens = arg.Split(';');
+            if(tokens.Length >= 1)
+            {
+                prompt = tokens[0];
+                if (tokens.Length >= 2) {
+                    neg_prompt = tokens[1];
+                    if (tokens.Length >= 3 && tokens[2].Contains('x'))
+                    {
+                        string[] res = tokens[2].Split('x');
+                        width = int.Parse(res[0]);
+                        height = int.Parse(res[1]);
+                        if(tokens.Length >= 4)
+                        {
+                            sampler = tokens[3];
+                        }
+                    }
+                }
+            }
+            if (data != null)
+            {
+                File.WriteAllBytes("tmp.png", data);
+                var resp = await Utilities.PostJson(client, "/sdapi/v1/img2img", new StableDiffusion.Img2ImgRequest() { prompt = arg, init_images = new List<string>() { Convert.ToBase64String(data) }, negative_prompt = neg_prompt, sampler_index = sampler });
+                if (resp.StatusCode == System.Net.HttpStatusCode.OK)
+                {
+                    string respJson = await resp.Content.ReadAsStringAsync();
+                    StableDiffusion.Txt2ImgResponse imgResp = JsonSerializer.Deserialize<StableDiffusion.Txt2ImgResponse>(respJson);
+                    byte[] output = Convert.FromBase64String(imgResp.images[0]);
+                    File.WriteAllBytes("sd.png", output);
+                    return "sd.png";
+                }
+            }
+            else
+            {
+                var resp = await Utilities.PostJson(client, "/sdapi/v1/txt2img", new StableDiffusion.Txt2ImgRequest() { prompt = arg, negative_prompt = neg_prompt, width = width, height = height, sampler_index = sampler }, new JsonSerializerOptions() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault});
+                if (resp.StatusCode == System.Net.HttpStatusCode.OK)
+                {
+                    string respJson = await resp.Content.ReadAsStringAsync();
+                    StableDiffusion.Txt2ImgResponse imgResp = JsonSerializer.Deserialize<StableDiffusion.Txt2ImgResponse>(respJson);
+                    byte[] output = Convert.FromBase64String(imgResp.images[0]);
+                    File.WriteAllBytes("sd.png", output);
+                    return "sd.png";
+                }
+            }
+            return string.Empty;
         }
 
         private async Task<string> ChatBot_HandlePathCommand(string user)

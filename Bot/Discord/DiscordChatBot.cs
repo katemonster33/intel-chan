@@ -22,6 +22,7 @@ namespace IntelChan.Bot.Discord
         ITextChannel textChannel;
 
         public event Func<string, Task<string>> HandlePathCommand;
+        public event Func<string, byte[], Task<string>> HandleDrawCommand;
 
         IConfiguration Config { get; }
 
@@ -51,28 +52,25 @@ namespace IntelChan.Bot.Discord
         async Task _client_MessageReceived(SocketMessage arg)
         {
             if (arg == null) throw new ArgumentNullException(nameof(arg));
-            if(arg.Channel != textChannel)
+            string cc = arg.CleanContent;
+            while(cc.StartsWith("@") && cc.IndexOf(' ') != -1)
             {
-                return;
+                cc = cc.Trim().Substring(cc.IndexOf(' ') + 1);
             }
-            if (arg.MentionedUsers.Contains(_client.CurrentUser))
-            {
-
-            }
-            else if (arg.Content.StartsWith("!"))
+            if (cc.StartsWith("!"))
             {
                 // attempt to process command
                 string commandName = string.Empty;
                 string remainder = string.Empty;
-                int firstSpaceIndex = arg.Content.IndexOf(' ');
+                int firstSpaceIndex = cc.IndexOf(' ');
                 if (firstSpaceIndex == -1)
                 {
-                    commandName = arg.Content.Substring(1);
+                    commandName = cc.Substring(1);
                 }
                 else
                 {
-                    commandName = arg.Content.Substring(1, firstSpaceIndex - 1);
-                    remainder = arg.Content.Substring(firstSpaceIndex + 1);
+                    commandName = cc.Substring(1, firstSpaceIndex - 1);
+                    remainder = cc.Substring(firstSpaceIndex + 1);
                 }
                 if(string.IsNullOrWhiteSpace(remainder) && arg.Author is SocketGuildUser guildUser)
                 {
@@ -88,10 +86,22 @@ namespace IntelChan.Bot.Discord
                     case "path":
                         reply = await HandlePathCommand?.Invoke(remainder);
                         break;
+                    case "draw":
+                        byte[] input = null;
+                        if(arg.Attachments.Count > 0)
+                        {
+                            input = await Utilities.Download(arg.Attachments.First().Url);
+                        }
+                        string file = await HandleDrawCommand?.Invoke(remainder, input);
+                        if(!string.IsNullOrWhiteSpace(file))
+                        {
+                            await arg.Channel.SendFileAsync(file);
+                        }
+                        break;
                 }
                 if(!string.IsNullOrEmpty(reply))
                 {
-                    await textChannel.SendMessageAsync(reply);
+                    await arg.Channel.SendMessageAsync(reply);
                 }
             }
         }

@@ -53,6 +53,13 @@ namespace Zkill
                     return;
             }
 
+            if(zkillConnection.State != WebSocketState.None)
+            {
+                if(zkillConnection.State == WebSocketState.Open) await zkillConnection.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, cancelToken);
+                zkillConnection.Dispose();
+                zkillConnection = new ClientWebSocket();
+            }
+
             await zkillConnection.ConnectAsync(new Uri("wss://zkillboard.com/websocket/"), cancelToken);
 
             if (zkillConnection.State == WebSocketState.Open)
@@ -71,6 +78,7 @@ namespace Zkill
 
         private async Task ReadAsync()
         {
+            List<string> lastKills = new List<string>();
             string recvStr = string.Empty;
             ArraySegment<byte> buffer = new ArraySegment<byte>(new byte[1024]);
             while (zkillConnection.State == WebSocketState.Open)
@@ -101,7 +109,16 @@ namespace Zkill
                 {
                     JsonDocument json = JsonDocument.Parse(recvStr);
                     string link = json.RootElement.GetProperty("url").GetString();
-                    KillReceived?.Invoke(this, link);
+                    
+                    if(!lastKills.Contains(link))
+                    {
+                        KillReceived?.Invoke(this, link);
+                        if(lastKills.Count == 5)
+                        {
+                            lastKills.RemoveAt(0);
+                        }
+                        lastKills.Add(link);
+                    }
                     Logger.LogInformation("Kill Received");
                     recvStr = string.Empty;
                 }
@@ -126,6 +143,22 @@ namespace Zkill
         public async Task UnsubscribeAll()
         {
             await SendWebsocketTextAsync("{\"action\":\"unsub\",\"channel\":\"killstream\"}");
+        }
+
+        public async Task SubscribeCorps(List<string> corpIds)
+        {
+            foreach(var corpId in corpIds)
+            {
+                await SendWebsocketTextAsync("{\"action\":\"sub\",\"channel\":\"corporation:" + corpId + "\"}");
+            }
+        }
+
+        public async Task UnsubscribeCorps(List<string> corpIds)
+        {
+            foreach(var corpId in corpIds)
+            {
+                await SendWebsocketTextAsync("{\"action\":\"unsub\",\"channel\":\"corporation:" + corpId + "\"}");
+            }
         }
 
         public async Task SubscribeSystems(List<string> systemIds)

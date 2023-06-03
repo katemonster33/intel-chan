@@ -103,8 +103,8 @@ namespace Tripwire
 
             request.Content = new FormUrlEncodedContent(new List<KeyValuePair<string, string>>()
             {
-                new KeyValuePair<string, string>("systemID", systemId),
-                new KeyValuePair<string, string>("_", ""),
+                new("systemID", systemId),
+                new("_", ""),
             });
             
             var response = await client.SendAsync(request);
@@ -230,7 +230,15 @@ namespace Tripwire
                 new KeyValuePair<string, string>("instance","1615002323.5"),
                 new KeyValuePair<string, string>("version","1.16")
             });
-            HttpResponseMessage response = await client.SendAsync(request, token);
+            HttpResponseMessage response;
+            try
+            {
+                response = await client.SendAsync(request, token);
+            }
+            catch (HttpRequestException)
+            {
+                return;
+            }
             string responseJson = string.Empty;
 
             _syncTime = DateTime.Now;

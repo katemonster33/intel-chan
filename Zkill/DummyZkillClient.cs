@@ -59,5 +59,15 @@ namespace Zkill
         {
             return Task.CompletedTask;
         }
+
+        public Task SubscribeCorps(List<string> corpIds)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task UnsubscribeCorps(List<string> corpIds)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

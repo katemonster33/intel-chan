@@ -16,6 +16,7 @@ namespace IntelChan.Bot.Groupme
         string botId = string.Empty;
 
         public event Func<string, Task<string>> HandlePathCommand;
+        public event Func<string, byte[], Task<string>> HandleDrawCommand;
 
         IConfiguration Config { get; }
         public GroupmeBot(IConfiguration config)
