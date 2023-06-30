@@ -31,7 +31,11 @@ namespace IntelChan
                     double secStatus = jsonSystemInfo.RootElement.GetProperty("security_status").GetDouble();
                     //if(secStatus < 0.5)
                     //{
-                    systemNames.Add(jsonSystemInfo.RootElement.GetProperty("name").GetString());
+                    var name = jsonSystemInfo.RootElement.GetProperty("name").GetString();
+                    if (name != null)
+                    {
+                        systemNames.Add(name);
+                    }
                     //}
                 }
             }

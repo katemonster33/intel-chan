@@ -11,6 +11,7 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.IO.Compression;
 using System.IO;
+using System.Dynamic;
 
 namespace Tripwire
 {
@@ -32,7 +33,7 @@ namespace Tripwire
 
         string phpSessionId = string.Empty;
 
-        JsonDocument jsonDocument;
+        JsonDocument? jsonDocument;
 
         IConfiguration Configuration { get; }
 
@@ -119,7 +120,11 @@ namespace Tripwire
                     var occJson = initJson.RootElement.GetProperty("occupants");
                     foreach(var occ in occJson.EnumerateArray())
                     {
-                        occupants.Add(JsonSerializer.Deserialize<Occupant>(occ.ToString()));
+                        var occObj = JsonSerializer.Deserialize<Occupant>(occ.ToString());
+                        if (occObj != null)
+                        {
+                            occupants.Add(occObj);
+                        }
                     }
                 }
             }
@@ -157,7 +162,7 @@ namespace Tripwire
                 new KeyValuePair<string, string>("username", username),
                 new KeyValuePair<string, string>("password", password)
             });
-            HttpResponseMessage response = null;
+            HttpResponseMessage? response = null;
             try
             {
                 response = await client.SendAsync(request, token);
@@ -196,7 +201,11 @@ namespace Tripwire
                     var tabs = initJson.RootElement.GetProperty("session").GetProperty("options").GetProperty("chain").GetProperty("tabs");
                     foreach (var tab in tabs.EnumerateArray())
                     {
-                        systemIds.Add(tab.GetProperty("systemID").GetString());
+                        var sysId = tab.GetProperty("systemID").GetString();
+                        if (sysId != null)
+                        {
+                            systemIds.Add(sysId);
+                        }
                     }
                 }
             }
@@ -241,7 +250,11 @@ namespace Tripwire
             {
                 string json = new StreamReader(stream).ReadToEnd();
                 jsonDocument = JsonDocument.Parse(json);
-                _syncTime = DateTime.Parse(jsonDocument.RootElement.GetProperty("sync").GetString());
+                var syncVal = jsonDocument.RootElement.GetProperty("sync").GetString();
+                if (syncVal != null)
+                {
+                    _syncTime = DateTime.Parse(syncVal);
+                }
             }
             if(jsonDocument.RootElement.TryGetProperty("wormholes", out var wormholes))
             {
@@ -250,7 +263,11 @@ namespace Tripwire
                     cachedHoles.Clear();
                     foreach (var node in wormholes.EnumerateObject())
                     {
-                        cachedHoles.Add(JsonSerializer.Deserialize<Wormhole>(node.Value.ToString()));
+                        var nodeObj = JsonSerializer.Deserialize<Wormhole>(node.Value.ToString());
+                        if(nodeObj != null)
+                        {
+                            cachedHoles.Add(nodeObj);
+                        }
                     }
                 }
             }
@@ -262,7 +279,7 @@ namespace Tripwire
                     foreach (var node in sigs.EnumerateObject())
                     {
                         var sig = JsonSerializer.Deserialize<Signature>(node.Value.ToString());
-                        if (sig.SystemID != null && sig.SystemID.Length > 3)
+                        if (sig != null && sig.SystemID != null && sig.SystemID.Length > 3)
                         {
                             cachedSigs.Add(sig);
                         }
@@ -277,7 +294,10 @@ namespace Tripwire
                     foreach(var node in occupants.EnumerateArray())
                     {
                         var occ = JsonSerializer.Deserialize<OccupiedSystem>(node.ToString());
-                        cachedOccupiedSystems.Add(occ);
+                        if (occ != null)
+                        {
+                            cachedOccupiedSystems.Add(occ);
+                        }
                     }
                 }
                 

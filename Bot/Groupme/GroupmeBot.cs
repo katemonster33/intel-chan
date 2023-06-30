@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -13,9 +14,12 @@ namespace IntelChan.Bot.Groupme
     public class GroupmeBot : IChatBot
     {
         string accessToken = string.Empty;
-        string botId = string.Empty;
+        string? botId = string.Empty;
 
-        public event Func<string, Task<string>> HandlePathCommand;
+        public event Func<string, Task<string>>? HandlePathCommand;
+        public event Func<string, byte[], Task<string>>? HandleDrawCommand;
+        public event Func<Task<List<string>>>? HandleGetModelsCommand;
+        public event Func<string, Task<bool>>? HandleSetModelCommand;
 
         IConfiguration Config { get; }
         public GroupmeBot(IConfiguration config)
@@ -24,7 +28,7 @@ namespace IntelChan.Bot.Groupme
 
             botId = Config["groupme-bot-id"];
 
-            if (string.IsNullOrEmpty(botId))
+            if (botId == null || string.IsNullOrEmpty(botId))
                 throw new ApplicationException("missing config value for groupme-bot-id");
         }
 
@@ -62,7 +66,7 @@ namespace IntelChan.Bot.Groupme
             }
         }
 
-        public async Task<HttpResponseMessage> Post(string message, string remoteImageUrl)
+        public async Task<HttpResponseMessage?> Post(string message, string remoteImageUrl)
         {
             using HttpClient client = new();
             HttpResponseMessage response = await Utilities.GetHttp(client, remoteImageUrl);
@@ -81,18 +85,22 @@ namespace IntelChan.Bot.Groupme
             {
                 return response;
             }
-            UploadResponse resp = await Utilities.ReadResponseAsJson<UploadResponse>(response);
-            Post p = new Post()
+            var resp = await Utilities.ReadResponseAsJson<UploadResponse>(response);
+            if (resp != null && resp.Payload != null)
             {
-                BotId = botId,
-                Text = message,
-                Attachments = new System.Collections.Generic.List<Attachment>()
+                Post p = new Post()
+                {
+                    BotId = botId,
+                    Text = message,
+                    Attachments = new System.Collections.Generic.List<Attachment>()
                 {
                     new Attachment(){ Type = "image", URL = resp.Payload.Url }
                 }
-            };
-            string jsonString = JsonSerializer.Serialize(p);
-            return await client.PostAsJsonAsync("https://api.groupme.com/v3/bots/post", p);
+                };
+                string jsonString = JsonSerializer.Serialize(p);
+                return await client.PostAsJsonAsync("https://api.groupme.com/v3/bots/post", p);
+            }
+            else return null;
         }
 
         public Task DisconnectAsync()

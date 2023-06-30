@@ -16,5 +16,7 @@ namespace Zkill
         void Dispose();
         Task SubscribeSystems(List<string> systemIds);
         Task UnsubscribeSystems(List<string> systemIds);
+        Task SubscribeCorps(List<string> systemIds);
+        Task UnsubscribeCorps(List<string> systemIds);
     }
 }

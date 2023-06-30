@@ -5,19 +5,19 @@ namespace Tripwire
     public class Wormhole
     {
         [JsonPropertyName("initialID")]
-        public string InitialID { get; set; }
+        public string InitialID { get; set; } = "";
 
         [JsonPropertyName("secondaryID")]
-        public string SecondaryID { get; set; }
+        public string SecondaryID { get; set; } = "";
 
         [JsonPropertyName("parent")]
-        public string Parent { get; set; }
+        public string Parent { get; set; } = "";
 
         [JsonPropertyName("maskID")]
-        public string MaskID { get; set; }
-        
+        public string MaskID { get; set; } = "";
 
-        public string GetParentId()
+
+        public string? GetParentId()
         {
             if(Parent == "initial")
             {
@@ -31,7 +31,7 @@ namespace Tripwire
         }
         
 
-        public string GetChildId()
+        public string? GetChildId()
         {
             if(Parent == "initial")
             {

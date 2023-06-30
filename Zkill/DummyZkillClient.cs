@@ -11,9 +11,9 @@ namespace Zkill
 
         public CancellationToken CancelToken { get; set; }
 
-        public event EventHandler<string> KillReceived;
+        public event EventHandler<string>? KillReceived;
 
-        Task readThread = null;
+        Task? readThread = null;
         public async Task ConnectAsync(CancellationToken cancelToken)
         {
             Connected = true;
@@ -56,6 +56,16 @@ namespace Zkill
         }
 
         public Task UnsubscribeSystems(List<string> systemIds)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SubscribeCorps(List<string> systemIds)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task UnsubscribeCorps(List<string> systemIds)
         {
             return Task.CompletedTask;
         }

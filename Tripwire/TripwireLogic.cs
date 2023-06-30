@@ -26,7 +26,7 @@ namespace Tripwire
         public DateTime SyncTime { get => _syncTime; }
         DateTime _syncTime;
 
-        public WormholeSystem CreateSystem(Wormhole connection, string parentSigId, Signature signature, IList<Signature> signatures, IList<Wormhole> wormholes, WormholeSystem parent, int level)
+        public WormholeSystem CreateSystem(Wormhole? connection, string parentSigId, Signature signature, IList<Signature> signatures, IList<Wormhole> wormholes, WormholeSystem? parent, int level)
         {
             WormholeSystem output = new WormholeSystem()
             {
@@ -70,7 +70,7 @@ namespace Tripwire
             }
         }
 
-        public WormholeSystem FindSystem(string systemId, IEnumerable<WormholeSystem> systems)
+        public WormholeSystem? FindSystem(string systemId, IEnumerable<WormholeSystem> systems)
         {
             foreach(var sys in systems)
             {
@@ -90,7 +90,7 @@ namespace Tripwire
             return null;
         }
 
-        public async Task<WormholeSystem> FindCharacter(string name)
+        public async Task<WormholeSystem?> FindCharacter(string name)
         {
             IList<OccupiedSystem> occupiedSystems = await DataProvider.GetOccupiedSystems();
             foreach(var sys in occupiedSystems)

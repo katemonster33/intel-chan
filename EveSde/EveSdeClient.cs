@@ -38,7 +38,7 @@ namespace EveSde
         
         public string GetName(uint id)
         {
-            string output = string.Empty;
+            string? output = string.Empty;
             if(!idsToNames.TryGetValue(id, out output))
             {
                 output = "(BAD ID)";

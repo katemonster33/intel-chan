@@ -11,13 +11,17 @@ using Microsoft.Extensions.Logging;
 using Tripwire;
 using Zkill;
 using EveSde;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.IO;
+using System.Buffers.Text;
+using System.Text.Json;
 
 namespace IntelChan
 {
 
     public class Worker : IHostedService
     {
-        IConfigurationRoot Configuration { get; set; }
         IServiceProvider Services { get; set; }
         ILogger<Worker> Logger { get; set; }
 
@@ -26,6 +30,9 @@ namespace IntelChan
         IChatBot ChatBot { get; }
 
         IEveSdeClient SdeClient { get; }
+
+        const string jitaSystemId = "30000142";
+        const string amarrSystemId = "30002187";
 
 
         public Worker(IZkillClient zkillClient, IChatBot chatBot, TripwireLogic tripwire, ILogger<Worker> logger, IServiceProvider services, IEveSdeClient sdeClient)
@@ -40,6 +47,7 @@ namespace IntelChan
 
         public async Task StartAsync(CancellationToken token)
         {
+            string[] ignoredSystemIds = {jitaSystemId, amarrSystemId};
             if(!SdeClient.Start())
             {
                 Logger.LogError("Could not load SDE contents");
@@ -58,6 +66,9 @@ namespace IntelChan
                 return;
             }
             ChatBot.HandlePathCommand += ChatBot_HandlePathCommand;
+            ChatBot.HandleDrawCommand += ChatBot_HandleDrawCommand;
+            ChatBot.HandleGetModelsCommand += ChatBot_HandleGetModelsCommand;
+            ChatBot.HandleSetModelCommand += ChatBot_HandleSetModelCommand;
 
             //await ChatBot.Post("Reactor online. Sensors online. Weapons online. All systems nominal.");
             //await ChatBot.Post("Am I alive?");
@@ -71,8 +82,13 @@ namespace IntelChan
             }
             ZkillClient.KillReceived += async (sender, link) =>
             {
-                await ChatBot?.Post(link);
+                if (ChatBot != null)
+                {
+                    await ChatBot.Post(link);
+                }
             };
+
+            await ZkillClient.SubscribeCorps(new List<string>(){"98277602", "98725923"});
 
             await TripwireLogic.StartAsync(token);
 
@@ -84,11 +100,15 @@ namespace IntelChan
 
             Logger.LogInformation("Tripwire / Zkill connection successful, kill report subscriptions should commence shortly.");
             List<string> subscribedSystemIds = new List<string>();
-            List<WormholeSystem> currentSystems = null;
+            List<WormholeSystem>? currentSystems = null;
             do
             {
                 if (!ZkillClient.Connected)
+                {
                     await ZkillClient.ConnectAsync(token);
+                    
+                    await ZkillClient.SubscribeCorps(new List<string>(){"98277602", "98725923"});
+                }
 
                 var response = await TripwireLogic.GetChains(token);
 
@@ -102,7 +122,7 @@ namespace IntelChan
                     {
                         TripwireLogic.FlattenList(chain, ref systems);
                     }
-                    var systemIds = systems.Select(x => x.SystemId).Distinct();
+                    var systemIds = systems.Select(x => x.SystemId).Except(ignoredSystemIds).Distinct();
 
                     List<string> addedSigs = systemIds.Except(subscribedSystemIds).ToList();
                     await ZkillClient.SubscribeSystems(addedSigs);
@@ -117,13 +137,11 @@ namespace IntelChan
 
                         foreach (var sys in addedSigs)
                         {
-                            var system = systems.FirstOrDefault(x => x.SystemId == sys);
-                            subbed.AppendLine($"{system.SystemName}");
+                            subbed.AppendLine(SystemIdToText(systems, sys));
                         }
                         foreach (var sys in removedSigs)
                         {
-                            var system = currentSystems.FirstOrDefault(x => x.SystemId == sys);
-                            unsubbed.AppendLine($"{system.SystemName}");
+                            unsubbed.AppendLine(SystemIdToText(systems, sys));
                         }
                         //update currentsystems
                         currentSystems = systems;
@@ -141,8 +159,176 @@ namespace IntelChan
             }
             while (true);
 
+            await ZkillClient.DisconnectAsync();
+            ZkillClient.Dispose();
+
             await ChatBot.DisconnectAsync();
             ChatBot.Dispose();
+        }
+
+        private async Task<bool> ChatBot_HandleSetModelCommand(string arg)
+        {
+            var models = await GetStableDiffusionModels();
+            string? modelTitle = null;
+            if (models != null)
+            {
+                foreach(var mod in models)
+                {
+                    if(mod.ModelName == arg)
+                    {
+                        modelTitle = mod.Title; 
+                        break;
+                    }
+                }
+            }
+            if(modelTitle == null)
+            {
+                return false;
+            }
+            var newOptions = new StableDiffusion.Options()
+            {
+                SdModelCheckpoint = modelTitle
+            };
+            using (HttpClient client = new HttpClient())
+            {
+                client.BaseAddress = new Uri("http://127.0.0.1:7860");
+                List<string> output = new List<string>();
+                var resp = await Utilities.PostJson(client, "/sdapi/v1/options", newOptions, Utilities.GetSerializerOptions());
+                return resp.StatusCode == System.Net.HttpStatusCode.OK;
+            }
+        }
+
+        async Task<List<StableDiffusion.SdModel>> GetStableDiffusionModels()
+        {
+            List<StableDiffusion.SdModel> output = new List<StableDiffusion.SdModel>();
+            using (HttpClient client = new HttpClient())
+            {
+                client.BaseAddress = new Uri("http://127.0.0.1:7860");
+                var resp = await Utilities.GetHttp(client, "/sdapi/v1/sd-models");
+                if (resp.StatusCode == System.Net.HttpStatusCode.OK)
+                {
+                    string respJson = await resp.Content.ReadAsStringAsync();
+                    var models = JsonSerializer.Deserialize<List<StableDiffusion.SdModel>>(respJson, Utilities.GetSerializerOptions());
+                    if (models != null)
+                    {
+                        output = new List<StableDiffusion.SdModel>(models);
+                    }
+                }
+            }
+            return output;
+        }
+
+        private async Task<List<string>> ChatBot_HandleGetModelsCommand()
+        {
+            var models = await GetStableDiffusionModels();
+            List<string> output = new List<string>();
+            using (HttpClient client = new HttpClient())
+            {
+                client.BaseAddress = new Uri("http://127.0.0.1:7860");
+                var resp = await Utilities.GetHttp(client, "/sdapi/v1/options");
+                string? curModel = null;
+                if (resp.StatusCode == System.Net.HttpStatusCode.OK)
+                {
+                    string respJson = await resp.Content.ReadAsStringAsync();
+                    var options = JsonSerializer.Deserialize<StableDiffusion.Options>(respJson, Utilities.GetSerializerOptions());
+                    if (options != null)
+                    {
+                        curModel = options.SdModelCheckpoint;
+                    }
+                }
+                foreach (var mod in models)
+                {
+                    if (curModel != null && mod.Title == curModel)
+                    {
+                        output.Add("* " + mod.ModelName + " *");
+                    }
+                    else
+                    {
+                        output.Add(mod.ModelName);
+                    }
+                }
+            }
+            return output;
+        }
+
+        string SystemIdToText(List<WormholeSystem> systems, string sysId)
+        {
+            var system = systems.FirstOrDefault(x => x.SystemId == sysId);
+            if (system != null)
+            {
+                return $"{SdeClient.GetName(uint.Parse(system.SystemId))}";
+            }
+            else
+            {
+                return $"UNKNOWN SYSTEM ID {sysId}";
+            }
+        }
+
+        private async Task<string> ChatBot_HandleDrawCommand(string arg, byte[]? data)
+        {
+            HttpClient client = new HttpClient();
+            client.BaseAddress = new Uri("http://127.0.0.1:7860");
+            string prompt = "", neg_prompt = "nsfw, nudity", sampler = "Euler a";
+            int width = 512, height = 512;
+            string[] tokens = arg.Split(';');
+            if(tokens.Length >= 1)
+            {
+                prompt = tokens[0];
+                if (tokens.Length >= 2) {
+                    neg_prompt = tokens[1];
+                    if (tokens.Length >= 3 && tokens[2].Contains('x'))
+                    {
+                        string[] res = tokens[2].Split('x');
+                        width = int.Parse(res[0]);
+                        height = int.Parse(res[1]);
+                        if(tokens.Length >= 4)
+                        {
+                            sampler = tokens[3];
+                        }
+                    }
+                }
+            }
+            HttpResponseMessage resp;
+            if (data != null)
+            {
+                File.WriteAllBytes("tmp.png", data);
+                resp = await Utilities.PostJson(client, "/sdapi/v1/img2img", 
+                    new StableDiffusion.Img2ImgRequest() 
+                    { 
+                        prompt = arg, 
+                        init_images = new List<string>() { Convert.ToBase64String(data) }, 
+                        negative_prompt = neg_prompt, 
+                        sampler_index = sampler 
+                    });
+            }
+            else
+            {
+                resp = await Utilities.PostJson(client, "/sdapi/v1/txt2img", 
+                    new StableDiffusion.Txt2ImgRequest() 
+                    { 
+                        prompt = arg, 
+                        negative_prompt = neg_prompt, 
+                        width = width, 
+                        height = height, 
+                        sampler_index = sampler 
+                    }, 
+                    new JsonSerializerOptions() 
+                    { 
+                        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault
+                    });
+            }
+            if (resp.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                string respJson = await resp.Content.ReadAsStringAsync();
+                var imgResp = JsonSerializer.Deserialize<StableDiffusion.Txt2ImgResponse>(respJson);
+                if (imgResp != null)
+                {
+                    byte[] output = Convert.FromBase64String(imgResp.images[0]);
+                    File.WriteAllBytes("sd.png", output);
+                    return "sd.png";
+                }
+            }
+            return string.Empty;
         }
 
         private async Task<string> ChatBot_HandlePathCommand(string user)

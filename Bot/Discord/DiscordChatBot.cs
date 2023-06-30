@@ -5,6 +5,8 @@ using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
@@ -17,11 +19,14 @@ namespace IntelChan.Bot.Discord
     {
         DiscordSocketClient _client;
 
-        string discordBotToken;
+        string? discordBotToken;
 
-        ITextChannel textChannel;
+        ITextChannel? textChannel;
 
-        public event Func<string, Task<string>> HandlePathCommand;
+        public event Func<string, Task<string>>? HandlePathCommand;
+        public event Func<string, byte[]?, Task<string>>? HandleDrawCommand;
+        public event Func<Task<List<string>>>? HandleGetModelsCommand;
+        public event Func<string, Task<bool>>? HandleSetModelCommand;
 
         IConfiguration Config { get; }
 
@@ -48,31 +53,60 @@ namespace IntelChan.Bot.Discord
                 throw new ApplicationException("missing config value for discord-token");
         }
 
+        string mockingText(string input)
+        {
+            string output_text = "";
+
+            foreach (char c in input)
+            {
+
+                if (char.IsLetter(c))
+                {
+                    if (Random.Shared.Next(1000) > 500)
+                    {
+                        output_text += char.ToUpper(c);
+                    }
+                    else
+                    {
+                        output_text += char.ToLower(c);
+                    }
+                }
+                else
+                {
+                    output_text += c;
+                }
+
+            }
+            return output_text;
+        }
+        
+
         async Task _client_MessageReceived(SocketMessage arg)
         {
             if (arg == null) throw new ArgumentNullException(nameof(arg));
-            if(arg.Channel != textChannel)
+            string cc = arg.Content;
+            if(arg.Author is SocketGuildUser sgi)
             {
-                return;
+                if(sgi.DisplayName.Contains("Carl Bathana") || sgi.DisplayName.Contains("carl_engelke"))
+                {
+                    await arg.Channel.SendMessageAsync(mockingText(arg.CleanContent));
+                    return;
+                }
             }
-            if (arg.MentionedUsers.Contains(_client.CurrentUser))
-            {
-
-            }
-            else if (arg.Content.StartsWith("!"))
+            if (cc.StartsWith("!"))
             {
                 // attempt to process command
                 string commandName = string.Empty;
                 string remainder = string.Empty;
-                int firstSpaceIndex = arg.Content.IndexOf(' ');
+                int firstSpaceIndex = cc.IndexOf(' ');
                 if (firstSpaceIndex == -1)
                 {
-                    commandName = arg.Content.Substring(1);
+                    commandName = cc.Substring(1);
                 }
                 else
                 {
-                    commandName = arg.Content.Substring(1, firstSpaceIndex - 1);
-                    remainder = arg.Content.Substring(firstSpaceIndex + 1);
+                    commandName = cc.Substring(1, firstSpaceIndex - 1);
+                    remainder = cc.Substring(firstSpaceIndex + 1);
                 }
                 if(string.IsNullOrWhiteSpace(remainder) && arg.Author is SocketGuildUser guildUser)
                 {
@@ -86,12 +120,61 @@ namespace IntelChan.Bot.Discord
                 switch (commandName)
                 {
                     case "path":
-                        reply = await HandlePathCommand?.Invoke(remainder);
+                        if (HandlePathCommand != null)
+                        {
+                            reply = await HandlePathCommand.Invoke(remainder);
+                        }
+                        break;
+                    case "draw":
+                        if (HandleDrawCommand != null)
+                        {
+                            byte[]? input = null;
+                            if (arg.Attachments.Count > 0)
+                            {
+                                input = await Utilities.Download(arg.Attachments.First().Url);
+                            }
+                            await Task.Run(async () =>
+                            {
+                                string file = await HandleDrawCommand.Invoke(remainder, input);
+                                if (!string.IsNullOrWhiteSpace(file))
+                                {
+                                    await arg.Channel.SendFileAsync(file);
+                                }
+                            }).ConfigureAwait(false);
+                        }
+                        break;
+                    case "getmodels":
+                        if(HandleGetModelsCommand != null)
+                        {
+                            var output = await HandleGetModelsCommand();
+                            if(output != null)
+                            {
+                                await arg.Channel.SendMessageAsync(string.Join("\n", output));
+                            }
+                        }
+                        break;
+
+                    case "setmodel":
+                        if (HandleSetModelCommand != null)
+                        {
+                            _ = Task.Run(async () =>
+                            {
+                                var output = await HandleSetModelCommand(remainder);
+                                if (output)
+                                {
+                                    await arg.Channel.SendMessageAsync("Set model SUCCESS!");
+                                }
+                                else
+                                {
+                                    await arg.Channel.SendMessageAsync("Set model FAILED! Check your entry!");
+                                }
+                            });
+                        }
                         break;
                 }
                 if(!string.IsNullOrEmpty(reply))
                 {
-                    await textChannel.SendMessageAsync(reply);
+                    await arg.Channel.SendMessageAsync(reply);
                 }
             }
         }
@@ -134,7 +217,10 @@ namespace IntelChan.Bot.Discord
 
         public async Task Post(string message)
         {
-            await textChannel?.SendMessageAsync(message);
+            if (textChannel != null)
+            {
+                await textChannel.SendMessageAsync(message);
+            }
         }
 
         public void Dispose()
