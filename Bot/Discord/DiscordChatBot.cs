@@ -85,9 +85,9 @@ namespace IntelChan.Bot.Discord
         {
             if (arg == null) throw new ArgumentNullException(nameof(arg));
             string cc = arg.Content;
-            if(arg.Author is SocketGuildUser sgi)
+            if (arg.Author is SocketGuildUser sgi)
             {
-                if(sgi.DisplayName.Contains("Carl Bathana") || sgi.DisplayName.Contains("carl_engelke"))
+                if (sgi.DisplayName.Contains("Oisan") || sgi.DisplayName.Contains("ois_in"))
                 {
                     await arg.Channel.SendMessageAsync(mockingText(arg.CleanContent));
                     return;
@@ -217,6 +217,23 @@ namespace IntelChan.Bot.Discord
 
         public async Task Post(string message)
         {
+            if(_client.ConnectionState != ConnectionState.Connected)
+            {
+                Logger.LogWarning("Tried to post, but Discord not connected!");
+                return;
+            }
+            if(textChannel == null)
+            {
+                try
+                {
+                    textChannel = (ITextChannel)_client.GetChannel(1034557067614224454);
+                }
+                catch(Exception e)
+                {
+                    textChannel = null;
+                    Logger.LogWarning("Tried to post a message, but textChannel was null. tried to set and got exception: " + e.Message);
+                }
+            }
             if (textChannel != null)
             {
                 await textChannel.SendMessageAsync(message);

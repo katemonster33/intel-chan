@@ -87,8 +87,7 @@ namespace IntelChan
                     await ChatBot.Post(link);
                 }
             };
-
-            await ZkillClient.SubscribeCorps(new List<string>(){"98277602", "98725923"});
+            await ZkillClient.SubscribeCorps(new List<string>(){"98277602", "98725923" }); // Volantean Nation [VOLNA] added
 
             await TripwireLogic.StartAsync(token);
 
@@ -106,8 +105,8 @@ namespace IntelChan
                 if (!ZkillClient.Connected)
                 {
                     await ZkillClient.ConnectAsync(token);
-                    
-                    await ZkillClient.SubscribeCorps(new List<string>(){"98277602", "98725923"});
+
+                    await ZkillClient.SubscribeCorps(new List<string>() { "98277602", "98725923" }); // Volantean Nation [VOLNA] added
                 }
 
                 var response = await TripwireLogic.GetChains(token);

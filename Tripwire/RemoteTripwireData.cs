@@ -12,6 +12,8 @@ using System.Threading;
 using System.IO.Compression;
 using System.IO;
 using System.Dynamic;
+using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
 
 namespace Tripwire
 {
@@ -37,14 +39,17 @@ namespace Tripwire
 
         IConfiguration Configuration { get; }
 
+        ILogger<RemoteTripwireData> Logger { get; }
+
         public DateTime SyncTime { get => _syncTime; }
 
         DateTime _syncTime;
         long epochTimestamp = 0;
 
-        public RemoteTripwireData(IConfiguration config)
+        public RemoteTripwireData(IConfiguration config, ILogger<RemoteTripwireData> logger)
         {
             Configuration = config;
+            Logger = logger;
         }
 
         async Task<bool> PopulatePHPSessionId()
@@ -239,24 +244,37 @@ namespace Tripwire
                 new KeyValuePair<string, string>("instance","1615002323.5"),
                 new KeyValuePair<string, string>("version","1.16")
             });
-            HttpResponseMessage response = await client.SendAsync(request, token);
-            string responseJson = string.Empty;
-
-            _syncTime = DateTime.Now;
-
-            if (response.StatusCode != global::System.Net.HttpStatusCode.OK)
-                return;
-            using(var stream = response.Content.ReadAsStream())
+            try
             {
-                string json = new StreamReader(stream).ReadToEnd();
-                jsonDocument = JsonDocument.Parse(json);
-                var syncVal = jsonDocument.RootElement.GetProperty("sync").GetString();
-                if (syncVal != null)
+                HttpResponseMessage response = await client.SendAsync(request, token);
+                string responseJson = string.Empty;
+
+                _syncTime = DateTime.Now;
+
+                if (response.StatusCode != global::System.Net.HttpStatusCode.OK)
+                    return;
+                using (var stream = response.Content.ReadAsStream())
                 {
-                    _syncTime = DateTime.Parse(syncVal);
+                    string json = new StreamReader(stream).ReadToEnd();
+                    jsonDocument = JsonDocument.Parse(json);
+                    var syncVal = jsonDocument.RootElement.GetProperty("sync").GetString();
+                    if (syncVal != null)
+                    {
+                        _syncTime = DateTime.Parse(syncVal);
+                    }
                 }
             }
-            if(jsonDocument.RootElement.TryGetProperty("wormholes", out var wormholes))
+            catch(SocketException se)
+            {
+                Logger.LogWarning("Failed to fetch data from Tripwire! " + se.Message);
+                return;
+            }
+            catch (HttpRequestException se)
+            {
+                Logger.LogWarning("Failed to fetch data from Tripwire! " + se.Message);
+                return;
+            }
+            if (jsonDocument.RootElement.TryGetProperty("wormholes", out var wormholes))
             {
                 lock(cachedHoles)
                 {

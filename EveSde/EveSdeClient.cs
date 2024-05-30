@@ -23,11 +23,14 @@ namespace EveSde
             {
                 return false;
             }
-            var deserializer = new DeserializerBuilder().Build();
-            List<IdNamePair> idNamePairs = deserializer.Deserialize<List<IdNamePair>>(File.OpenText(invNamesPath));
-            foreach(var idNamePair in idNamePairs)
+            if (File.Exists(invNamesPath))
             {
-                idsToNames[(uint)idNamePair.itemID] = idNamePair.itemName;
+                var deserializer = new DeserializerBuilder().Build();
+                List<IdNamePair> idNamePairs = deserializer.Deserialize<List<IdNamePair>>(File.OpenText(invNamesPath));
+                foreach (var idNamePair in idNamePairs)
+                {
+                    idsToNames[(uint)idNamePair.itemID] = idNamePair.itemName;
+                }
             }
             return true;
         }
