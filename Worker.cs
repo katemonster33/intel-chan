@@ -8,6 +8,7 @@ using IntelChan.Bot;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.CognitiveServices.Speech;
 using Tripwire;
 using Zkill;
 using EveSde;
@@ -16,6 +17,7 @@ using System.Net.Http.Json;
 using System.IO;
 using System.Buffers.Text;
 using System.Text.Json;
+using IntelChan.VoiceChatter;
 
 namespace IntelChan
 {
@@ -26,8 +28,10 @@ namespace IntelChan
         ILogger<Worker> Logger { get; set; }
 
         IZkillClient ZkillClient { get; }
-        TripwireLogic TripwireLogic { get; }
+        //TripwireLogic TripwireLogic { get; }
         IChatBot ChatBot { get; }
+
+        ElevenLabs ElevenLabsClient { get; }
 
         IEveSdeClient SdeClient { get; }
 
@@ -35,14 +39,15 @@ namespace IntelChan
         const string amarrSystemId = "30002187";
 
 
-        public Worker(IZkillClient zkillClient, IChatBot chatBot, TripwireLogic tripwire, ILogger<Worker> logger, IServiceProvider services, IEveSdeClient sdeClient)
+        public Worker(IZkillClient zkillClient, IChatBot chatBot, /*TripwireLogic tripwire, */ILogger<Worker> logger, IServiceProvider services, IEveSdeClient sdeClient, ElevenLabs elevenLabs)
         {
             Services = services;
             ZkillClient = zkillClient;
             ChatBot = chatBot;
-            TripwireLogic = tripwire;
+            //TripwireLogic = tripwire;
             Logger = logger;
             SdeClient = sdeClient;
+            ElevenLabsClient = elevenLabs;
         }
 
         public async Task StartAsync(CancellationToken token)
@@ -65,7 +70,7 @@ namespace IntelChan
                 Logger.LogWarning("Could not connect to discord.");
                 return;
             }
-            ChatBot.HandlePathCommand += ChatBot_HandlePathCommand;
+            //ChatBot.HandlePathCommand += ChatBot_HandlePathCommand;
             ChatBot.HandleDrawCommand += ChatBot_HandleDrawCommand;
             ChatBot.HandleGetModelsCommand += ChatBot_HandleGetModelsCommand;
             ChatBot.HandleSetModelCommand += ChatBot_HandleSetModelCommand;
@@ -89,15 +94,15 @@ namespace IntelChan
             };
             await ZkillClient.SubscribeCorps(new List<string>(){"98277602", "98725923" }); // Volantean Nation [VOLNA] added
 
-            await TripwireLogic.StartAsync(token);
+            //await TripwireLogic.StartAsync(token);
 
-            if (!TripwireLogic.Connected)
-            {
-                Logger.LogWarning("Could not connect to Tripwire.");
-                return;
-            }
+            //if (!TripwireLogic.Connected)
+            //{
+            //    Logger.LogWarning("Could not connect to Tripwire.");
+            //    return;
+            //}
 
-            Logger.LogInformation("Tripwire / Zkill connection successful, kill report subscriptions should commence shortly.");
+            Logger.LogInformation("Zkill connection successful, kill report subscriptions should commence shortly.");
             List<string> subscribedSystemIds = new List<string>();
             List<WormholeSystem>? currentSystems = null;
             do
@@ -109,48 +114,48 @@ namespace IntelChan
                     await ZkillClient.SubscribeCorps(new List<string>() { "98277602", "98725923" }); // Volantean Nation [VOLNA] added
                 }
 
-                var response = await TripwireLogic.GetChains(token);
+                //var response = await TripwireLogic.GetChains(token);
 
-                DateTime syncTime = TripwireLogic.SyncTime;
-                if (response.Count > 0)
-                {
-                    var systems = new List<WormholeSystem>();
-                    if (currentSystems == null)
-                        currentSystems = new List<WormholeSystem>(systems);
-                    foreach (var chain in response)
-                    {
-                        TripwireLogic.FlattenList(chain, ref systems);
-                    }
-                    var systemIds = systems.Select(x => x.SystemId).Except(ignoredSystemIds).Distinct();
+                //DateTime syncTime = TripwireLogic.SyncTime;
+                //if (response.Count > 0)
+                //{
+                //    var systems = new List<WormholeSystem>();
+                //    if (currentSystems == null)
+                //        currentSystems = new List<WormholeSystem>(systems);
+                //    foreach (var chain in response)
+                //    {
+                //        TripwireLogic.FlattenList(chain, ref systems);
+                //    }
+                //    var systemIds = systems.Select(x => x.SystemId).Except(ignoredSystemIds).Distinct();
 
-                    List<string> addedSigs = systemIds.Except(subscribedSystemIds).ToList();
-                    await ZkillClient.SubscribeSystems(addedSigs);
+                //    List<string> addedSigs = systemIds.Except(subscribedSystemIds).ToList();
+                //    await ZkillClient.SubscribeSystems(addedSigs);
 
-                    List<string> removedSigs = subscribedSystemIds.Except(systemIds).ToList();
-                    await ZkillClient.UnsubscribeSystems(removedSigs);
-                    if (addedSigs.Any() || removedSigs.Any())
-                    {
-                        subscribedSystemIds = new List<string>(systemIds);
-                        var subbed = new StringBuilder();
-                        var unsubbed = new StringBuilder();
+                //    List<string> removedSigs = subscribedSystemIds.Except(systemIds).ToList();
+                //    await ZkillClient.UnsubscribeSystems(removedSigs);
+                //    if (addedSigs.Any() || removedSigs.Any())
+                //    {
+                //        subscribedSystemIds = new List<string>(systemIds);
+                //        var subbed = new StringBuilder();
+                //        var unsubbed = new StringBuilder();
 
-                        foreach (var sys in addedSigs)
-                        {
-                            subbed.AppendLine(SystemIdToText(systems, sys));
-                        }
-                        foreach (var sys in removedSigs)
-                        {
-                            unsubbed.AppendLine(SystemIdToText(systems, sys));
-                        }
-                        //update currentsystems
-                        currentSystems = systems;
-                        if (addedSigs.Any())
-                            Logger.LogInformation($"Subscribed to:{Environment.NewLine}{subbed.ToString()}");
-                        if (removedSigs.Any())
-                            Logger.LogInformation($"UnSubscribed from:{Environment.NewLine}{unsubbed.ToString()}");
-                        Logger.LogInformation($"Subscribed to {addedSigs.Count} systems, unsubscribed from {removedSigs.Count} systems. Monitoring {subscribedSystemIds.Count()} systems.");
-                    }
-                }
+                //        foreach (var sys in addedSigs)
+                //        {
+                //            subbed.AppendLine(SystemIdToText(systems, sys));
+                //        }
+                //        foreach (var sys in removedSigs)
+                //        {
+                //            unsubbed.AppendLine(SystemIdToText(systems, sys));
+                //        }
+                //        //update currentsystems
+                //        currentSystems = systems;
+                //        if (addedSigs.Any())
+                //            Logger.LogInformation($"Subscribed to:{Environment.NewLine}{subbed.ToString()}");
+                //        if (removedSigs.Any())
+                //            Logger.LogInformation($"UnSubscribed from:{Environment.NewLine}{unsubbed.ToString()}");
+                //        Logger.LogInformation($"Subscribed to {addedSigs.Count} systems, unsubscribed from {removedSigs.Count} systems. Monitoring {subscribedSystemIds.Count()} systems.");
+                //    }
+                //}
 
                 if (token.IsCancellationRequested)
                     break;
@@ -158,9 +163,15 @@ namespace IntelChan
             }
             while (true);
 
-            await ZkillClient.DisconnectAsync();
-            ZkillClient.Dispose();
-
+            try
+            {
+                await ZkillClient.DisconnectAsync();
+                ZkillClient.Dispose();
+            }
+            catch(Exception)
+            {
+                Logger.LogWarning("Couldn't kill zkill");
+            }
             await ChatBot.DisconnectAsync();
             ChatBot.Dispose();
         }
@@ -294,7 +305,7 @@ namespace IntelChan
                 resp = await Utilities.PostJson(client, "/sdapi/v1/img2img", 
                     new StableDiffusion.Img2ImgRequest() 
                     { 
-                        prompt = arg, 
+                        prompt = prompt, 
                         init_images = new List<string>() { Convert.ToBase64String(data) }, 
                         negative_prompt = neg_prompt, 
                         sampler_index = sampler 
@@ -305,7 +316,7 @@ namespace IntelChan
                 resp = await Utilities.PostJson(client, "/sdapi/v1/txt2img", 
                     new StableDiffusion.Txt2ImgRequest() 
                     { 
-                        prompt = arg, 
+                        prompt = prompt, 
                         negative_prompt = neg_prompt, 
                         width = width, 
                         height = height, 
@@ -330,36 +341,36 @@ namespace IntelChan
             return string.Empty;
         }
 
-        private async Task<string> ChatBot_HandlePathCommand(string user)
-        {
-            string output = string.Empty;
-            if(TripwireLogic.Connected)
-            {
-                var response = await TripwireLogic.FindCharacter(user);
-                if(response == null)
-                {
-                    return "Character \"" + user + "\" not found in chain :(";
-                }
-                else
-                {
-                    output = SdeClient.GetName(uint.Parse(response.SystemId));
-                    var responseCopy = response;
-                    var parent = response.Parent;
-                    while(responseCopy.Parent != null)
-                    {
-                        string sig = "???";
-                        if(responseCopy.ParentSignatureId != null && responseCopy.ParentSignatureId.Length > 3)
-                        {
-                            sig = responseCopy.ParentSignatureId.Substring(0, 3).ToUpper();
-                        }
-                        output = SdeClient.GetName(uint.Parse(responseCopy.Parent.SystemId)) + " -> " + sig + "|" + output;
-                        responseCopy = responseCopy.Parent;
-                    }
-                    output = "Path to " + user + ": " + output;
-                }
-            }
-            return output;
-        }
+        //private async Task<string> ChatBot_HandlePathCommand(string user)
+        //{
+        //    string output = string.Empty;
+        //    if(TripwireLogic.Connected)
+        //    {
+        //        var response = await TripwireLogic.FindCharacter(user);
+        //        if(response == null)
+        //        {
+        //            return "Character \"" + user + "\" not found in chain :(";
+        //        }
+        //        else
+        //        {
+        //            output = SdeClient.GetName(uint.Parse(response.SystemId));
+        //            var responseCopy = response;
+        //            var parent = response.Parent;
+        //            while(responseCopy.Parent != null)
+        //            {
+        //                string sig = "???";
+        //                if(responseCopy.ParentSignatureId != null && responseCopy.ParentSignatureId.Length > 3)
+        //                {
+        //                    sig = responseCopy.ParentSignatureId.Substring(0, 3).ToUpper();
+        //                }
+        //                output = SdeClient.GetName(uint.Parse(responseCopy.Parent.SystemId)) + " -> " + sig + "|" + output;
+        //                responseCopy = responseCopy.Parent;
+        //            }
+        //            output = "Path to " + user + ": " + output;
+        //        }
+        //    }
+        //    return output;
+        //}
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
