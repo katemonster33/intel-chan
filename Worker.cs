@@ -31,15 +31,13 @@ namespace IntelChan
         //TripwireLogic TripwireLogic { get; }
         IChatBot ChatBot { get; }
 
-        ElevenLabs ElevenLabsClient { get; }
-
         IEveSdeClient SdeClient { get; }
 
         const string jitaSystemId = "30000142";
         const string amarrSystemId = "30002187";
 
 
-        public Worker(IZkillClient zkillClient, IChatBot chatBot, /*TripwireLogic tripwire, */ILogger<Worker> logger, IServiceProvider services, IEveSdeClient sdeClient, ElevenLabs elevenLabs)
+        public Worker(IZkillClient zkillClient, IChatBot chatBot, /*TripwireLogic tripwire, */ILogger<Worker> logger, IServiceProvider services, IEveSdeClient sdeClient)
         {
             Services = services;
             ZkillClient = zkillClient;
@@ -47,7 +45,6 @@ namespace IntelChan
             //TripwireLogic = tripwire;
             Logger = logger;
             SdeClient = sdeClient;
-            ElevenLabsClient = elevenLabs;
         }
 
         public async Task StartAsync(CancellationToken token)

@@ -48,8 +48,6 @@ namespace IntelChan.Bot.Discord
         public event Func<Task<List<string>>>? HandleGetModelsCommand;
         public event Func<string, Task<bool>>? HandleSetModelCommand;
 
-        ElevenLabs ElevenLabsClient { get; }
-
         IConfiguration Config { get; }
 
         ILogger<DiscordChatBot> Logger { get; }
@@ -57,11 +55,10 @@ namespace IntelChan.Bot.Discord
         ChatClient OpenAiClient { get; }
         OpenAIConfig openAIConfig { get; }
 
-        public DiscordChatBot(IConfiguration config, ILogger<DiscordChatBot> logger, ElevenLabs elevenLabs)
+        public DiscordChatBot(IConfiguration config, ILogger<DiscordChatBot> logger)
         {
             Config = config;
             Logger = logger;
-            ElevenLabsClient = elevenLabs;
             //OpenAIAPI = new OpenAIAPI(Config["openai-key"] ?? string.Empty);
             OpenAiClient = new ChatClient("gpt-4", Config["openai-key"] ?? string.Empty, new());
             if(File.Exists("OpenAiCfg.json"))
@@ -77,6 +74,7 @@ namespace IntelChan.Bot.Discord
             _client.Ready += _client_Ready;
 
             _client.SlashCommandExecuted += Client_SlashCommandExecuted;
+
 
             _client.Disconnected += _client_Disconnected;
 
