@@ -73,8 +73,6 @@ namespace IntelChan.Bot.Discord
 
             _client.Ready += _client_Ready;
 
-            _client.SlashCommandExecuted += Client_SlashCommandExecuted;
-
             _client.Disconnected += _client_Disconnected;
 
             _client.MessageReceived += _client_MessageReceived;
@@ -596,19 +594,6 @@ namespace IntelChan.Bot.Discord
             }
         }
 
-        private async Task Client_SlashCommandExecuted(SocketSlashCommand command)
-        {
-            switch (command.Data.Name)
-            {
-                case "draw":
-                    if(HandleDrawCommand != null)
-                    {
-                        string prompt = (string)command.Data.Options.First().Value;
-                        await HandleDrawCommand.Invoke(prompt, null);
-                    }
-                    break;
-            }
-        }
         bool intsAdded = false;
         private async Task _client_Ready()
         {
