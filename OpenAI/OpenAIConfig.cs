@@ -12,14 +12,32 @@ namespace IntelChan.OpenAI
 {
     public class OpenAIConfig
     {
-        Dictionary<string, List<ChatMessage>> ChatContexts { get; set; }
+        public enum MessageType
+        {
+            System,
+            User,
+            Assistant
+        }
+        public class SerializableChatMessage
+        {
+            public MessageType MessageType { get; set; }
 
-        Dictionary<string, List<ChatMessage>> SavedCharacters { get; set; }
+            public string Message { get; set; }
+
+            public SerializableChatMessage(MessageType messageType, string message)
+            {
+                MessageType = messageType;
+                Message = message;
+            }
+        }
+        public Dictionary<string, List<SerializableChatMessage>> ChatContexts { get; set; }
+
+        public Dictionary<string, List<SerializableChatMessage>> SavedCharacters { get; set; }
 
         public OpenAIConfig()
         {
-            ChatContexts = new Dictionary<string, List<ChatMessage>>();
-            SavedCharacters = new Dictionary<string, List<ChatMessage>>();
+            ChatContexts = new Dictionary<string, List<SerializableChatMessage>>();
+            SavedCharacters = new Dictionary<string, List<SerializableChatMessage>>();
         }
 
         public static OpenAIConfig LoadFromFile(string configFilePath)
@@ -34,7 +52,31 @@ namespace IntelChan.OpenAI
 
         public bool TryGetContextMessages(string context, [NotNullWhen(true)] out List<ChatMessage>? messages)
         {
-            return ChatContexts.TryGetValue(context, out messages);
+            if(ChatContexts.TryGetValue(context, out var serializableChats))
+            {
+                messages = new List<ChatMessage>();
+                foreach(var msg in serializableChats)
+                {
+                    switch(msg.MessageType)
+                    {
+                        case MessageType.System:
+                            messages.Add(new SystemChatMessage(msg.Message));
+                            break;
+                        case MessageType.User:
+                            messages.Add(new UserChatMessage(msg.Message));
+                            break;
+                        case MessageType.Assistant:
+                            messages.Add(new AssistantChatMessage(msg.Message));
+                            break;
+                    }
+                }
+                return true;
+            }
+            else
+            {
+                messages = null;
+                return false;
+            }
         }
 
         public List<string> GetCharacters()
@@ -47,7 +89,7 @@ namespace IntelChan.OpenAI
             summary = null;
             if(SavedCharacters.TryGetValue(characterName, out var list))
             {
-                summary = list[0].Content.ToString() ?? string.Empty;
+                summary = list[0].Message;
                 return true;
             }
             return false;
@@ -58,19 +100,19 @@ namespace IntelChan.OpenAI
             summary = null;
             if(ChatContexts.TryGetValue(context, out var list))
             {
-                summary = list[0].Content.ToString() ?? string.Empty;
+                summary = list[0].Message ?? string.Empty;
                 return true;
             }
             return false;
         }
 
-        public bool StartCharacter(string context, SystemChatMessage firstMessage)
+        public bool StartCharacter(string context, string firstMessage)
         {
             if(ChatContexts.ContainsKey(context))
             {
                 return false;
             }
-            ChatContexts[context] = new List<ChatMessage>() { firstMessage };
+            ChatContexts[context] = [ new SerializableChatMessage(MessageType.System, firstMessage )];
             return true;
         }
 
@@ -83,7 +125,7 @@ namespace IntelChan.OpenAI
         {
             if(ChatContexts.TryGetValue(context, out var list))
             {
-                SavedCharacters[characterName] = new List<ChatMessage>(list);
+                SavedCharacters[characterName] = new List<SerializableChatMessage>(list);
                 return true;
             }
             return false;
@@ -93,7 +135,7 @@ namespace IntelChan.OpenAI
         {
             if(SavedCharacters.TryGetValue(characterName, out var list))
             {
-                ChatContexts[context] = new List<ChatMessage>(list);
+                ChatContexts[context] = new List<SerializableChatMessage>(list);
                 return true;
             }
             return false;

@@ -75,14 +75,12 @@ namespace IntelChan.Bot.Discord
 
             _client.SlashCommandExecuted += Client_SlashCommandExecuted;
 
-
             _client.Disconnected += _client_Disconnected;
 
             _client.MessageReceived += _client_MessageReceived;
             //_client.get
 
             _intHandler = new InteractionService(_client);
-
 
             _intHandler.Log += LogAsync;
 
@@ -444,9 +442,10 @@ namespace IntelChan.Bot.Discord
                         break;
 
                     case "startcharacter":
-                        if(openAIConfig.StartCharacter(arg.Channel.Id.ToString(), new SystemChatMessage(remainder)))
+                        if(openAIConfig.StartCharacter(arg.Channel.Id.ToString(), remainder))
                         {
                             await arg.Channel.SendMessageAsync("Started character successfully.");
+                            openAIConfig.Save("OpenAiCfg.json");
                         }
                         else
                         {
@@ -458,6 +457,7 @@ namespace IntelChan.Bot.Discord
                         if(openAIConfig.StopCharacter(arg.Channel.Id.ToString()))
                         {
                             await arg.Channel.SendMessageAsync("Success, character stopped.");
+                            openAIConfig.Save("OpenAiCfg.json");
                         }
                         else
                         {
@@ -469,6 +469,7 @@ namespace IntelChan.Bot.Discord
                         if(openAIConfig.SaveCharacter(arg.Channel.Id.ToString(), remainder))
                         {
                             await arg.Channel.SendMessageAsync($"Success, character \'{remainder}\' saved.");
+                            openAIConfig.Save("OpenAiCfg.json");
                         }
                         else
                         {
@@ -480,6 +481,7 @@ namespace IntelChan.Bot.Discord
                         if(openAIConfig.LoadCharacter(arg.Channel.Id.ToString(), remainder))
                         {
                             await arg.Channel.SendMessageAsync($"Success, character \'{remainder}\' loaded to the active session.");
+                            openAIConfig.Save("OpenAiCfg.json");
                         }
                         else
                         {
@@ -487,7 +489,7 @@ namespace IntelChan.Bot.Discord
                         }
                         break;
 
-                        case "getcharacters":
+                    case "getcharacters":
                         List<string> characters = openAIConfig.GetCharacters();
 
                         await arg.Channel.SendMessageAsync($"List of saved characters: [{string.Join(",", characters)}]");
