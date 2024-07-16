@@ -18,6 +18,7 @@ namespace IntelChan
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
+            .UseEnvironment("Development") // without this it won't load secrets
             .ConfigureServices((hostContext,myServices) =>
             {
                 myServices.AddHostedService<Worker>();
@@ -26,7 +27,6 @@ namespace IntelChan
                 myServices.AddSingleton<IZkillClient,ZkillClient>();
                 myServices.AddSingleton<IEveSdeClient, EveSdeClient>();
                 myServices.AddSingleton<TripwireLogic>();
-                
             });
     }
 }
