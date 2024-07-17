@@ -15,8 +15,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using Tripwire;
-//using OpenAI_API;
 using OpenAI.Chat;
 using Discord.Audio;
 using NAudio.Wave;
@@ -40,8 +38,6 @@ namespace IntelChan.Bot.Discord
 
         ITextChannel? textChannel;
 
-
-        public event Func<string, Task<string>>? HandlePathCommand;
         public event Func<string, byte[]?, Task<string>>? HandleDrawCommand;
         public event Func<Task<List<string>>>? HandleGetModelsCommand;
         public event Func<string, Task<bool>>? HandleSetModelCommand;
@@ -137,48 +133,38 @@ namespace IntelChan.Bot.Discord
             }
         }
 
-        string mockingText(string input)
-        {
-            string output_text = "";
+        // string mockingText(string input)
+        // {
+        //     string output_text = "";
 
-            foreach (char c in input)
-            {
+        //     foreach (char c in input)
+        //     {
 
-                if (char.IsLetter(c))
-                {
-                    if (Random.Shared.Next(1000) > 500)
-                    {
-                        output_text += char.ToUpper(c);
-                    }
-                    else
-                    {
-                        output_text += char.ToLower(c);
-                    }
-                }
-                else
-                {
-                    output_text += c;
-                }
+        //         if (char.IsLetter(c))
+        //         {
+        //             if (Random.Shared.Next(1000) > 500)
+        //             {
+        //                 output_text += char.ToUpper(c);
+        //             }
+        //             else
+        //             {
+        //                 output_text += char.ToLower(c);
+        //             }
+        //         }
+        //         else
+        //         {
+        //             output_text += c;
+        //         }
 
-            }
-            return output_text;
-        }
+        //     }
+        //     return output_text;
+        // }
 
         async Task _client_MessageReceived(SocketMessage arg)
         {
             if (arg == null) throw new ArgumentNullException(nameof(arg));
             string cc = arg.Content;
-            if (arg.Author is SocketGuildUser sgi)
-            {
-                if (sgi.DisplayName.Contains("Oisan") || sgi.DisplayName.Contains("ois_in"))
-                //if(sgi.Id == 381709342853824513)
-                {
-                    
-                    await arg.Channel.SendMessageAsync(mockingText(arg.CleanContent));
-                    
-                    return;
-                }
-            }
+            
             if (cc.StartsWith("!"))
             {
                 // attempt to process command
@@ -205,12 +191,6 @@ namespace IntelChan.Bot.Discord
                 string reply = string.Empty;
                 switch (commandName)
                 {
-                    case "path":
-                        if (HandlePathCommand != null)
-                        {
-                            reply = await HandlePathCommand.Invoke(remainder);
-                        }
-                        break;
                     case "draw":
                         if (HandleDrawCommand != null)
                         {
