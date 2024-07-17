@@ -9,9 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.CognitiveServices.Speech;
-using Tripwire;
 using Zkill;
-using EveSde;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.IO;
@@ -28,33 +26,23 @@ namespace IntelChan
         ILogger<Worker> Logger { get; set; }
 
         IZkillClient ZkillClient { get; }
-        //TripwireLogic TripwireLogic { get; }
         IChatBot ChatBot { get; }
-
-        IEveSdeClient SdeClient { get; }
 
         const string jitaSystemId = "30000142";
         const string amarrSystemId = "30002187";
 
 
-        public Worker(IZkillClient zkillClient, IChatBot chatBot, /*TripwireLogic tripwire, */ILogger<Worker> logger, IServiceProvider services, IEveSdeClient sdeClient)
+        public Worker(IZkillClient zkillClient, IChatBot chatBot, ILogger<Worker> logger, IServiceProvider services)
         {
             Services = services;
             ZkillClient = zkillClient;
             ChatBot = chatBot;
-            //TripwireLogic = tripwire;
             Logger = logger;
-            SdeClient = sdeClient;
         }
 
         public async Task StartAsync(CancellationToken token)
         {
-            string[] ignoredSystemIds = {jitaSystemId, amarrSystemId};
-            if(!SdeClient.Start())
-            {
-                Logger.LogError("Could not load SDE contents");
-                return;
-            }
+            string[] ignoredSystemIds = [jitaSystemId, amarrSystemId];
             await ChatBot.ConnectAsync(token);
 
             int startWaitTime = Environment.TickCount;
@@ -67,7 +55,6 @@ namespace IntelChan
                 Logger.LogWarning("Could not connect to discord.");
                 return;
             }
-            //ChatBot.HandlePathCommand += ChatBot_HandlePathCommand;
             ChatBot.HandleDrawCommand += ChatBot_HandleDrawCommand;
             ChatBot.HandleGetModelsCommand += ChatBot_HandleGetModelsCommand;
             ChatBot.HandleSetModelCommand += ChatBot_HandleSetModelCommand;
@@ -91,17 +78,8 @@ namespace IntelChan
             };
             await ZkillClient.SubscribeCorps(new List<string>(){"98277602", "98725923" }); // Volantean Nation [VOLNA] added
 
-            //await TripwireLogic.StartAsync(token);
-
-            //if (!TripwireLogic.Connected)
-            //{
-            //    Logger.LogWarning("Could not connect to Tripwire.");
-            //    return;
-            //}
-
             Logger.LogInformation("Zkill connection successful, kill report subscriptions should commence shortly.");
             List<string> subscribedSystemIds = new List<string>();
-            List<WormholeSystem>? currentSystems = null;
             do
             {
                 if (!ZkillClient.Connected)
@@ -110,49 +88,6 @@ namespace IntelChan
 
                     await ZkillClient.SubscribeCorps(new List<string>() { "98277602", "98725923" }); // Volantean Nation [VOLNA] added
                 }
-
-                //var response = await TripwireLogic.GetChains(token);
-
-                //DateTime syncTime = TripwireLogic.SyncTime;
-                //if (response.Count > 0)
-                //{
-                //    var systems = new List<WormholeSystem>();
-                //    if (currentSystems == null)
-                //        currentSystems = new List<WormholeSystem>(systems);
-                //    foreach (var chain in response)
-                //    {
-                //        TripwireLogic.FlattenList(chain, ref systems);
-                //    }
-                //    var systemIds = systems.Select(x => x.SystemId).Except(ignoredSystemIds).Distinct();
-
-                //    List<string> addedSigs = systemIds.Except(subscribedSystemIds).ToList();
-                //    await ZkillClient.SubscribeSystems(addedSigs);
-
-                //    List<string> removedSigs = subscribedSystemIds.Except(systemIds).ToList();
-                //    await ZkillClient.UnsubscribeSystems(removedSigs);
-                //    if (addedSigs.Any() || removedSigs.Any())
-                //    {
-                //        subscribedSystemIds = new List<string>(systemIds);
-                //        var subbed = new StringBuilder();
-                //        var unsubbed = new StringBuilder();
-
-                //        foreach (var sys in addedSigs)
-                //        {
-                //            subbed.AppendLine(SystemIdToText(systems, sys));
-                //        }
-                //        foreach (var sys in removedSigs)
-                //        {
-                //            unsubbed.AppendLine(SystemIdToText(systems, sys));
-                //        }
-                //        //update currentsystems
-                //        currentSystems = systems;
-                //        if (addedSigs.Any())
-                //            Logger.LogInformation($"Subscribed to:{Environment.NewLine}{subbed.ToString()}");
-                //        if (removedSigs.Any())
-                //            Logger.LogInformation($"UnSubscribed from:{Environment.NewLine}{unsubbed.ToString()}");
-                //        Logger.LogInformation($"Subscribed to {addedSigs.Count} systems, unsubscribed from {removedSigs.Count} systems. Monitoring {subscribedSystemIds.Count()} systems.");
-                //    }
-                //}
 
                 if (token.IsCancellationRequested)
                     break;
@@ -256,19 +191,6 @@ namespace IntelChan
                 }
             }
             return output;
-        }
-
-        string SystemIdToText(List<WormholeSystem> systems, string sysId)
-        {
-            var system = systems.FirstOrDefault(x => x.SystemId == sysId);
-            if (system != null)
-            {
-                return $"{SdeClient.GetName(uint.Parse(system.SystemId))}";
-            }
-            else
-            {
-                return $"UNKNOWN SYSTEM ID {sysId}";
-            }
         }
 
         private async Task<string> ChatBot_HandleDrawCommand(string arg, byte[]? data)
