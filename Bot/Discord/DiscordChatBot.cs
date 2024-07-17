@@ -1,27 +1,12 @@
 using Discord;
-using Discord.Net;
-using Discord.Net.Rest;
 using Discord.WebSocket;
-using IntelChan.VoiceChatter;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using Microsoft.CognitiveServices.Speech;
-using Microsoft.CognitiveServices.Speech.Audio;
-using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAI.Chat;
-using Discord.Audio;
-using NAudio.Wave;
-using System.Runtime.CompilerServices;
-using System.Diagnostics.CodeAnalysis;
-using Discord.Audio.Streams;
-using OpenAI;
 using IntelChan.OpenAI;
 using Discord.Interactions;
 using System.Reflection;
@@ -110,7 +95,7 @@ namespace IntelChan.Bot.Discord
                 var context = new SocketInteractionContext(_client, interaction);
 
                 // Execute the incoming command.
-                var result = await _intHandler.ExecuteCommandAsync(context, null);
+                var result = await _intHandler.ExecuteCommandAsync(context, ServiceProvider);
 
                 // Due to async nature of InteractionFramework, the result here may always be success.
                 // That's why we also need to handle the InteractionExecuted event.
