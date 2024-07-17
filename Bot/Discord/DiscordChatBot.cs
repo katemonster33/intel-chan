@@ -34,13 +34,11 @@ namespace IntelChan.Bot.Discord
     {
         DiscordSocketClient _client;
         InteractionService _intHandler;
+        IServiceProvider ServiceProvider { get; }
 
         string? discordBotToken;
 
         ITextChannel? textChannel;
-        IVoiceChannel? activeVoiceChannel;
-        IAudioClient? activeAudioClient;
-        CancellationTokenSource voiceChannelToken = new CancellationTokenSource();
 
 
         public event Func<string, Task<string>>? HandlePathCommand;
@@ -51,22 +49,15 @@ namespace IntelChan.Bot.Discord
         IConfiguration Config { get; }
 
         ILogger<DiscordChatBot> Logger { get; }
+        OpenAIService OpenAIService { get; }
         //OpenAIAPI OpenAIAPI { get; }
-        ChatClient OpenAiClient { get; }
-        OpenAIConfig openAIConfig { get; }
 
-        public DiscordChatBot(IConfiguration config, ILogger<DiscordChatBot> logger)
+        public DiscordChatBot(IConfiguration config, IServiceProvider serviceProvider, ILogger<DiscordChatBot> logger, OpenAIService openAIService)
         {
             Config = config;
+            ServiceProvider = serviceProvider;
             Logger = logger;
-            //OpenAIAPI = new OpenAIAPI(Config["openai-key"] ?? string.Empty);
-            OpenAiClient = new ChatClient("gpt-4", Config["openai-key"] ?? string.Empty, new());
-            if(File.Exists("OpenAiCfg.json"))
-            {
-                openAIConfig = OpenAIConfig.LoadFromFile("OpenAiCfg.json");
-            }
-            else openAIConfig = new OpenAIConfig();
-            
+            OpenAIService = openAIService;
             _client = new DiscordSocketClient(new DiscordSocketConfig(){GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.MessageContent | GatewayIntents.GuildVoiceStates | GatewayIntents.Guilds});
 
             _client.Log += Log;
@@ -173,150 +164,6 @@ namespace IntelChan.Bot.Discord
             return output_text;
         }
 
-        void OutputSpeechRecognitionResult(SpeechRecognitionResult speechRecognitionResult)
-        {
-            switch (speechRecognitionResult.Reason)
-            {
-                case ResultReason.RecognizedSpeech:
-                    Logger.LogInformation($"RECOGNIZED: Text={speechRecognitionResult.Text}");
-                    break;
-                case ResultReason.NoMatch:
-                    Logger.LogWarning($"NOMATCH: Speech could not be recognized.");
-                    break;
-                case ResultReason.Canceled:
-                    var cancellation = CancellationDetails.FromResult(speechRecognitionResult);
-                    string warning = $"CANCELED: Reason={cancellation.Reason}";
-
-                    if (cancellation.Reason == CancellationReason.Error)
-                    {
-                        warning += $", ErrorCode={cancellation.ErrorCode}, ErrorDetails={cancellation.ErrorDetails}: Did you set the speech resource key and region values?";
-                    }
-                    Logger.LogWarning(warning);
-                    break;
-                default:
-                    Logger.LogError("Unrecognized result: " + speechRecognitionResult.Reason.ToString());
-                    break;
-            }
-        }
-
-        async void HandleVoiceCall()
-        {
-            if(activeVoiceChannel == null)
-            {
-                return;
-            }
-            activeAudioClient = await activeVoiceChannel.ConnectAsync();
-            var speechConfig = SpeechConfig.FromSubscription(Config["azure-key-1"], "eastus");
-            speechConfig.SpeechRecognitionLanguage = "en-US";
-            Dictionary<ulong, DiscordAudioBuffer> audioBuffers = new Dictionary<ulong, DiscordAudioBuffer>();
-            foreach (var pair in activeAudioClient.GetStreams())
-            {
-                audioBuffers[pair.Key] = new DiscordAudioBuffer(pair.Value); //DiscordToAzureSpeechConverter.Create(pair.Value, speechConfig, voiceChannelToken.Token);
-            }
-            activeAudioClient.StreamCreated += (o, i) =>
-            {
-                return Task.Run(() =>
-                {
-                    lock (audioBuffers)
-                    {
-                        audioBuffers[o] = new DiscordAudioBuffer(i); //DiscordToAzureSpeechConverter.Create(i, speechConfig, voiceChannelToken.Token);
-                    }
-                });
-            };
-
-            activeAudioClient.StreamDestroyed += (o) =>
-            {
-                return Task.Run(() =>
-                {
-                    lock (audioBuffers)
-                    {
-                        audioBuffers.Remove(o);
-                    }
-                });
-            };
-
-            //var output = await MetaVoice.RequestAudio("Hello everyone. I am here.", "output");
-            //if (output != null)
-            //{
-                await SpeakAudio(activeAudioClient, "ding.mp3");
-            //}
-
-            while (!voiceChannelToken.IsCancellationRequested)
-            {
-                MemoryStream? memoryStream = null;
-                foreach(var buffer in new List<DiscordAudioBuffer>(audioBuffers.Values))
-                {
-                    
-                    if ((memoryStream = await buffer.TryRead(voiceChannelToken.Token)) != null)
-                    {
-                        break;
-                    }
-                }
-                if (memoryStream != null)
-                {
-                    memoryStream.Position = 0;
-                    DiscordAudioPullStreamCallback pullStreamCallback = new DiscordAudioPullStreamCallback(memoryStream);
-                    using var audioConfig = AudioConfig.FromStreamInput(AudioInputStream.CreatePullStream(pullStreamCallback));
-                    using var speechRecognizer = new SpeechRecognizer(speechConfig, audioConfig);
-                    var result = await speechRecognizer.RecognizeOnceAsync();
-                    OutputSpeechRecognitionResult(result);
-                    if (result.Reason == ResultReason.RecognizedSpeech)
-                    {
-                        string? prompt = null;
-                        if (result.Text.StartsWith("OK Intel"))
-                        {
-                            prompt = result.Text.Substring(8);
-                        }
-                        else if (result.Text.StartsWith("OK, Intel"))
-                        {
-                            prompt = result.Text.Substring(9);
-                        }
-                        if(prompt != null)
-                        {
-                            if(!openAIConfig.TryGetContextMessages(activeVoiceChannel.Id.ToString(), out var list))
-                            {
-                                list = new List<ChatMessage>();
-                            }
-                            list.Add(new UserChatMessage(prompt));
-                            ChatCompletion comp = OpenAiClient.CompleteChat(list, new ChatCompletionOptions());
-                            var output = await OpenVoice.RequestAudio(comp.ToString(), "output");
-                            if (output != null)
-                            {
-                                await SpeakAudio(activeAudioClient, output);
-                            }
-                        }
-                    }
-                }
-                Thread.Sleep(1);
-            }
-            await activeVoiceChannel.DisconnectAsync();
-            activeAudioClient.Dispose();
-            activeVoiceChannel = null;
-        }
-
-        bool TryGetVoiceChannel(string remainder, out IVoiceChannel? voiceChannel)
-        {
-            voiceChannel = null;
-            if (remainder.StartsWith("https://discord.com/channels/") || remainder.StartsWith("https://discordapp.com/channels/"))
-            {
-                string[] urlsplit = remainder.Split('/');
-                if (urlsplit.Length == 6 && ulong.TryParse(urlsplit[4], out ulong guildId) && ulong.TryParse(urlsplit[5], out ulong channelId))
-                {
-                    var guild = _client.GetGuild(guildId);
-                    if (guild != null)
-                    {
-                        var channel = guild.GetVoiceChannel(channelId);
-                        if (channel != null)
-                        {
-                            voiceChannel = channel;
-                            return true;
-                        }
-                    }
-                }
-            }
-            return false;
-        }
-        Task? voiceCallTask = null;
         async Task _client_MessageReceived(SocketMessage arg)
         {
             if (arg == null) throw new ArgumentNullException(nameof(arg));
@@ -411,39 +258,10 @@ namespace IntelChan.Bot.Discord
                         }
                         break;
 
-                    case "joincall":
-                        if (TryGetVoiceChannel(remainder, out var voiceChannel))
-                        {
-                            if (activeVoiceChannel != null)
-                            {
-                                await arg.Channel.SendMessageAsync("Already in channel!");
-                            }
-                            else
-                            {
-                                activeVoiceChannel = voiceChannel;
-                                voiceCallTask = Task.Run(HandleVoiceCall);
-                            }
-                        }
-                        else
-                        {
-                            await arg.Channel.SendMessageAsync("Unable to locate voice channel. Do I have permissions to see it?");
-                        }
-                        break;
-
-                    case "leavecall":
-                        if (voiceCallTask != null)
-                        {
-                            voiceChannelToken.Cancel();
-                            await voiceCallTask;
-                            voiceCallTask = null;
-                        }
-                        break;
-
                     case "startcharacter":
-                        if(openAIConfig.StartCharacter(arg.Channel.Id.ToString(), remainder))
+                        if(OpenAIService.StartCharacter(arg.Channel.Id.ToString(), remainder))
                         {
                             await arg.Channel.SendMessageAsync("Started character successfully.");
-                            openAIConfig.Save("OpenAiCfg.json");
                         }
                         else
                         {
@@ -452,10 +270,9 @@ namespace IntelChan.Bot.Discord
                         break;
 
                     case "stopcharacter":
-                        if(openAIConfig.StopCharacter(arg.Channel.Id.ToString()))
+                        if(OpenAIService.StopCharacter(arg.Channel.Id.ToString()))
                         {
                             await arg.Channel.SendMessageAsync("Success, character stopped.");
-                            openAIConfig.Save("OpenAiCfg.json");
                         }
                         else
                         {
@@ -464,10 +281,9 @@ namespace IntelChan.Bot.Discord
                         break;
 
                     case "savecharacter":
-                        if(openAIConfig.SaveCharacter(arg.Channel.Id.ToString(), remainder))
+                        if(OpenAIService.SaveCharacter(arg.Channel.Id.ToString(), remainder))
                         {
                             await arg.Channel.SendMessageAsync($"Success, character \'{remainder}\' saved.");
-                            openAIConfig.Save("OpenAiCfg.json");
                         }
                         else
                         {
@@ -476,10 +292,9 @@ namespace IntelChan.Bot.Discord
                         break;
 
                     case "loadcharacter":
-                        if(openAIConfig.LoadCharacter(arg.Channel.Id.ToString(), remainder))
+                        if(OpenAIService.LoadCharacter(arg.Channel.Id.ToString(), remainder))
                         {
                             await arg.Channel.SendMessageAsync($"Success, character \'{remainder}\' loaded to the active session.");
-                            openAIConfig.Save("OpenAiCfg.json");
                         }
                         else
                         {
@@ -488,7 +303,7 @@ namespace IntelChan.Bot.Discord
                         break;
 
                     case "getcharacters":
-                        List<string> characters = openAIConfig.GetCharacters();
+                        List<string> characters = OpenAIService.GetCharacters();
 
                         await arg.Channel.SendMessageAsync($"List of saved characters: [{string.Join(",", characters)}]");
                         break;
@@ -500,7 +315,7 @@ namespace IntelChan.Bot.Discord
                         {
                             int.TryParse(remainder, out numMessages);
                         }
-                        if(openAIConfig.Prune(arg.Channel.Id.ToString(), numMessages))
+                        if(OpenAIService.Prune(arg.Channel.Id.ToString(), numMessages))
                         {
                             await arg.Channel.SendMessageAsync($"Success, pruned the character log.");
                         }
@@ -510,30 +325,17 @@ namespace IntelChan.Bot.Discord
                         }
                         break;
 
-                    case "say":
-                        _ = Task.Run(async () =>
-                        {
-                            //var output = await ElevenLabsClient.RequestAudio(remainder, "neWi1tdhjirZA1DtRQ0I", "output.mp3");
-
-                            await SpeakAudio(arg.Channel, remainder);
-                        });
-                        break;
-
                     case "ask":
                         _ = Task.Run(async () =>
                         {
-                            if(!openAIConfig.TryGetContextMessages(arg.Channel.Id.ToString(), out var list))
+                            if(OpenAIService.CompleteChat(arg.Channel.Id.ToString(), remainder, out string? resp))
                             {
-                                list = new List<ChatMessage>();
+                                Logger.LogInformation("OpenAI said: " + reply);
+                                await arg.Channel.SendMessageAsync(reply);
                             }
-                            list.Add(new UserChatMessage(remainder));
-                            ChatCompletion comp = OpenAiClient.CompleteChat(list, new ChatCompletionOptions());
-                            if (comp != null)
+                            else
                             {
-                                Logger.LogInformation("OpenAI said: " + comp.ToString());
-                                await arg.Channel.SendMessageAsync(comp.ToString());
-                                //var output = await ElevenLabsClient.RequestAudio(comp.ToString(), "neWi1tdhjirZA1DtRQ0I", "output.mp3");
-                                //await SpeakAudio(arg.Channel, comp.ToString());
+                                await arg.Channel.SendMessageAsync("OpenAI did not respond.");
                             }
                             //var output = await OpenAIAPI.Completions.CreateAndFormatCompletion(new OpenAI_API.Completions.CompletionRequest(remainder));
                             //if (output != null)
@@ -550,50 +352,6 @@ namespace IntelChan.Bot.Discord
             }
         }
 
-        private async Task SpeakAudio(ISocketMessageChannel channel, string prompt)
-        {
-            var output = await OpenVoice.RequestAudio(prompt, "output");
-            if (output != null)
-            {
-                if (activeAudioClient != null)
-                {
-                    await SpeakAudio(activeAudioClient, output);
-                }
-                else
-                {
-                    await channel.SendFileAsync(Path.GetFullPath(output));
-                }
-                //File.Delete(Path.GetFullPath(output));
-                //await channel.SendMessageAsync(comp.ToString());
-            }
-        }
-
-        private async Task SpeakAudio(IAudioClient client, string output)
-        {
-            try
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = "ffmpeg",
-                    Arguments = $@"-i ""{Path.GetFullPath(output)}"" -ac 2 -f s16le -ar 48000 pipe:1",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false
-                };
-                using var ffmpeg = Process.Start(psi);
-                if (ffmpeg != null)
-                {
-                    var ffmpegStream = ffmpeg.StandardOutput.BaseStream;
-                    using var discord = client.CreatePCMStream(AudioApplication.Voice);
-                    await ffmpegStream.CopyToAsync(discord);
-                    await discord.FlushAsync();
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex.ToString());
-            }
-        }
-
         bool intsAdded = false;
         private async Task _client_Ready()
         {
@@ -602,7 +360,7 @@ namespace IntelChan.Bot.Discord
             if(!intsAdded)
             {
                 // Add the public modules that inherit InteractionModuleBase<T> to the InteractionService
-                await _intHandler.AddModulesAsync(Assembly.GetEntryAssembly(), null);
+                await _intHandler.AddModulesAsync(Assembly.GetEntryAssembly(), ServiceProvider);
                 await _intHandler.RegisterCommandsGloballyAsync();
                 intsAdded = true;
             }
@@ -663,7 +421,7 @@ namespace IntelChan.Bot.Discord
 
         public void Dispose()
         {
-            openAIConfig.Save("OpenAiCfg.json");
+            OpenAIService.Save();
             _client.Dispose();
         }
     }

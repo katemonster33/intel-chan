@@ -9,15 +9,21 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Web;
 using System.Collections.Specialized;
+using Microsoft.Extensions.Configuration;
 
 namespace IntelChan.VoiceChatter
 {
-    internal class OpenVoice
+    public class OpenVoiceService
     {
-        public static async Task<string?> RequestAudio(string prompt, string fileName)
-        {
-            string endpoint = "http://127.0.0.1:7861/base_tts/";
+        string Endpoint { get; }
 
+        public OpenVoiceService(IConfiguration config)
+        {
+            Endpoint = config["openvoice-endpoint"] ?? "http://127.0.0.1:7861/base_tts/";
+        }
+
+        public async Task<string?> RequestAudio(string prompt, string fileName)
+        {
             HttpClient client = new HttpClient();
 
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -31,7 +37,7 @@ namespace IntelChan.VoiceChatter
             httpQuery["accent"] = "en-newest";
             httpQuery["speed"] = "1";
             // Request MPEG
-            var response = await client.GetAsync($"{endpoint}?text={prompt}&accent=en-newest&speed=1");
+            var response = await client.GetAsync($"{Endpoint}?text={prompt}&accent=en-newest&speed=1");
 
             // Output Response to local MPEG file in the respective directory
             if (response != null)

@@ -6,6 +6,8 @@ using Microsoft.Extensions.Hosting;
 using Tripwire;
 using Zkill;
 using EveSde;
+using IntelChan.OpenAI;
+using IntelChan.VoiceChatter;
 
 namespace IntelChan
 {
@@ -26,7 +28,9 @@ namespace IntelChan
                 myServices.AddSingleton<ITripwireDataProvider,RemoteTripwireData>();
                 myServices.AddSingleton<IZkillClient,ZkillClient>();
                 myServices.AddSingleton<IEveSdeClient, EveSdeClient>();
+                myServices.AddSingleton<OpenAIService>();
                 myServices.AddSingleton<TripwireLogic>();
+                myServices.AddSingleton<OpenVoiceService>();
             });
     }
 }
